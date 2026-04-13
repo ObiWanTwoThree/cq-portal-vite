@@ -33,7 +33,7 @@ export default function Dashboard() {
         .eq('id', user.id)
         .single();
       if (dbError || !profileData?.role) {
-        setError('Unable to fetch user role.');
+        setError(`Unable to fetch user role. ${dbError?.message ?? 'No role found.'}`);
         setLoading(false);
         return;
       }
