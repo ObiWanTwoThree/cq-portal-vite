@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import NewTask from './pages/NewTask';
 import TaskDetails from './pages/TaskDetails';
 import MainLayout from './components/MainLayout';
+import PwaIconPreviewer from './pages/PwaIconPreviewer';
 
 function InviteRedirect() {
   const navigate = useNavigate();
@@ -27,6 +28,13 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/pwa-previewer" element={
+          <div className="min-h-screen bg-slate-200 flex items-start justify-center p-6">
+            <div className="w-full max-w-4xl">
+              <PwaIconPreviewer />
+            </div>
+          </div>
+        } />
         <Route
           path="/dashboard"
           element={
