@@ -1,0 +1,4 @@
+allowBuilds:
+  '@prisma/engines': false
+  core-js: false
+  prisma: false

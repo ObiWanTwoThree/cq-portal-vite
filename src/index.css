@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply overflow-x-hidden;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full min-w-0 border border-slate-200 rounded-lg px-4 py-2 text-slate-800 bg-white
+      focus:outline-none focus:ring-2 focus:ring-fuchsia-400
+      disabled:bg-slate-100 disabled:text-slate-400;
+  }
+
+  .btn-primary {
+    @apply w-full min-w-0 bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold
+      py-2 px-4 rounded-lg hover:opacity-90 shadow-md
+      disabled:opacity-60 transition-opacity;
+  }
+}

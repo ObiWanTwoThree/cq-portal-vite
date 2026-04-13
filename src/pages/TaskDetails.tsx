@@ -36,6 +36,18 @@ const TaskDetails = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Admin unassign handler
+  const handleUnassign = async () => {
+    if (!id) return;
+    if (!window.confirm('Are you sure you want to unassign this operative?')) return;
+    await supabase.from('tasks').update({ assigned_to: null }).eq('id', id);
+    // Refresh task state
+    setLoading(true);
+    const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
+    setTask(newTask);
+    setLoading(false);
+  };
+
   // PDF
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -130,6 +142,19 @@ const TaskDetails = () => {
                     <div className="text-slate-800">{task.status || '-'}</div>
                   </div>
                 </div>
+                {/* Assignment section for admin */}
+                {task.assigned_to && (
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="font-bold text-slate-700">Assigned Operative:</div>
+                    <div className="text-slate-800">{task.assigned_to}</div>
+                    <button
+                      className="ml-4 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold transition-all duration-200"
+                      onClick={handleUnassign}
+                    >
+                      Unassign
+                    </button>
+                  </div>
+                )}
                 <h3 className="font-bold text-slate-700">Notes</h3>
                 <p className="text-slate-600 bg-slate-50 p-4 rounded mt-2">{task.notes || <span className="italic text-slate-400">No notes provided.</span>}</p>
                 <button

@@ -26,29 +26,19 @@ export default function Dashboard() {
         return;
       }
       setUserEmail(user.email || '');
-      // Fetch role from users table
-      const { data: roleData, error: dbError } = await supabase
-        .from('users')
+      // Fetch role from profiles table
+      const { data: profileData, error: dbError } = await supabase
+        .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
-      if (dbError || !roleData?.role) {
+      if (dbError || !profileData?.role) {
         setError('Unable to fetch user role.');
         setLoading(false);
         return;
       }
-      setRole(roleData.role);
-      // Fetch full_name from profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-      if (profileData?.full_name) {
-        setUserName(profileData.full_name);
-      } else {
-        setUserName(user.email || 'User');
-      }
+      setRole(profileData.role);
+      setUserName(user.email || 'User');
       setLoading(false);
     };
     fetchUserAndRole();

@@ -1,15 +1,16 @@
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-export default function AdminDashboard() {
+const AdminDashboard = () => {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [userRole, setUserRole] = useState('operative');
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId;
     const fetchTasks = async () => {
       setLoading(true);
       setError('');
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
         } else {
           setTasks(data || []);
         }
-      } catch (err: any) {
+      } catch (err) {
         setError(err.message || 'An unknown error occurred.');
         setTasks([]);
       } finally {
@@ -35,7 +36,19 @@ export default function AdminDashboard() {
         setLoading(false);
       }
     };
+    const fetchUserRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        setUserRole(profile?.role || 'operative');
+      }
+    };
     fetchTasks();
+    fetchUserRole();
     return () => clearTimeout(timeoutId);
   }, []);
 
@@ -43,12 +56,14 @@ export default function AdminDashboard() {
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Admin Dashboard</h2>
-        <button
-          className="bg-gradient-to-r from-purple-800 to-fuchsia-600 hover:opacity-90 rounded-lg px-6 py-3 font-semibold shadow-md text-white transition"
-          onClick={() => navigate('/dashboard/new-task')}
-        >
-          Create New Task
-        </button>
+        {userRole === 'admin' && (
+          <button
+            className="bg-gradient-to-r from-purple-800 to-fuchsia-600 hover:opacity-90 rounded-lg px-6 py-3 font-semibold shadow-md text-white transition"
+            onClick={() => navigate('/dashboard/new-task')}
+          >
+            Create New Task
+          </button>
+        )}
       </div>
       <div className="bg-white rounded-xl shadow-md border border-slate-100 overflow-x-auto mt-6">
         {error && (
@@ -104,3 +119,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+export default AdminDashboard;
