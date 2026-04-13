@@ -30,7 +30,10 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
     <div className="flex min-h-screen bg-slate-50 overflow-x-hidden">
       {/* Sidebar (desktop) */}
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 z-30 bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-xl">
-        <div className="flex items-center h-20 px-6 font-bold text-2xl tracking-tight">CQ Portal</div>
+        <div className="flex items-center h-20 px-6 gap-3">
+          <img src="/cq-logo.png" alt="CQ Logo" className="h-10 w-10 object-contain rounded-full" />
+          <span className="font-bold text-xl tracking-tight">CQ Portal</span>
+        </div>
         <nav className="flex-1 px-2 mt-8 space-y-2">
           {navLinks.map(link => (
             <button

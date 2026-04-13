@@ -31,7 +31,10 @@ const LoginPage: React.FC = () => {
   return (
     <div className="w-full min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 sm:px-6 box-border">
       <form onSubmit={handleSubmit(onSubmit)} className="bg-white p-6 sm:p-8 rounded-xl shadow-md w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-bold text-center text-slate-800 break-words">Login</h1>
+        <div className="flex justify-center mb-2">
+          <img src="/cq-logo.png" alt="CQ Logo" className="h-20 w-20 object-contain" />
+        </div>
+        <h1 className="text-xl font-bold text-center text-slate-800 break-words">CQ Services Portal</h1>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
           <input

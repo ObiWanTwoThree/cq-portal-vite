@@ -52,9 +52,12 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="flex items-center justify-between px-8 py-4 bg-white shadow-sm border-b border-slate-100">
-        <div>
-          <div className="text-2xl font-bold text-slate-800 tracking-tight">CQ Services Portal</div>
-          <div className="text-slate-600 text-base mt-1">Welcome, {userName || userEmail || 'User'}!</div>
+        <div className="flex items-center gap-3">
+          <img src="/cq-logo.png" alt="CQ Logo" className="h-10 w-10 object-contain" />
+          <div>
+            <div className="text-2xl font-bold text-slate-800 tracking-tight">CQ Services Portal</div>
+            <div className="text-slate-600 text-base mt-1">Welcome, {userName || userEmail || 'User'}!</div>
+          </div>
         </div>
         <button
           onClick={handleLogout}
