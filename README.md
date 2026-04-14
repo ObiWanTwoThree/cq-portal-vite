@@ -1,73 +1,113 @@
-# React + TypeScript + Vite
+# CQ Services Portal (CQ Workplace Portal)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Internal jobs/tasks portal for CQ Services. Built with Vite + React + TypeScript and backed by Supabase (Auth, Postgres, Storage).
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Authentication**: email/password login via Supabase Auth.
+- **Role-based dashboards**:
+  - **Admin**: view all tasks and create new tasks.
+  - **Operative**: view available tasks, self-assign tasks, and manage assigned tasks.
+- **Task workflow**:
+  - create tasks with category/location/due date/notes
+  - upload images/files to Supabase Storage (`task-files`)
+  - task details page with updates/chat thread (`task_comments`)
+  - export a simple PDF from the task details screen
 
-## React Compiler
+## Tech stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: React, React Router, Zustand, React Hook Form, Zod
+- **Styling**: Tailwind
+- **Backend**: Supabase (Auth + Database + Storage)
+- **PWA**: `vite-plugin-pwa`
 
-## Expanding the ESLint configuration
+## Prerequisites
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Node.js + npm (or pnpm)
+- A Supabase project with:
+  - tables: `profiles`, `tasks`, `task_comments`, `invites` (see below)
+  - storage bucket: `task-files`
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Environment variables
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Create `.env.local` in the repo root:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_PUBLIC_KEY
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Notes:
+- These values are read in `src/lib/supabaseClient.ts`.
+- **Do not** use the Supabase **service role key** in the browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Install & run
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Build:
+
+```bash
+npm run build
+```
+
+Preview production build:
+
+```bash
+npm run preview
+```
+
+## App routes
+
+- `/login`: sign in
+- `/register`: set password for invite/recovery flows
+- `/dashboard`: role-based dashboard
+- `/dashboard/new-task`: create a task (admin)
+- `/task/:id`: task details + updates/chat + file upload + PDF export
+
+## Supabase data model (expected)
+
+This is the shape the UI code expects.
+
+### `profiles`
+
+- `id` (uuid, **matches** `auth.users.id`, PK)
+- `full_name` (text, optional)
+- `role` (text: `'admin' | 'operative'`)
+
+### `tasks`
+
+- `id` (uuid, PK)
+- `title` (text)
+- `category` (text)
+- `location` (text)
+- `notes` (text, optional)
+- `due_date` (date)
+- `status` (text, e.g. `Open`)
+- `created_by` (uuid, references user id)
+- `assigned_to` (uuid, nullable; operative user id when assigned)
+- `image_urls` (text[]; public storage URLs)
+- `created_at` (timestamptz)
+
+### `task_comments`
+
+- `id` (uuid, PK)
+- `task_id` (uuid, FK to `tasks.id`)
+- `user_id` (uuid)
+- `user_name` (text; currently set to the user email)
+- `content` (text; message text or an image URL)
+- `created_at` (timestamptz)
+
+### `invites`
+
+Used by the `/register` flow to mark invites as accepted:
+
+- `email` (text, unique)
+- `accepted` (boolean)
+
+## Deployment
+
+This repo includes `vercel.json` for SPA rewrites. Set the environment variables above in your hosting provider.
