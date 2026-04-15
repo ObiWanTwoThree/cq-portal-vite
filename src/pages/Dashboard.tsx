@@ -24,8 +24,6 @@ export default function Dashboard() {
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,7 +37,6 @@ export default function Dashboard() {
         navigate('/login');
         return;
       }
-      setUserEmail(user.email || '');
       // Fetch profile (role + optional full_name) from profiles table.
       // Use select('*') so the UI doesn't break if columns differ between environments.
       const { data: profileData, error: dbError } = await supabase
@@ -55,36 +52,20 @@ export default function Dashboard() {
         return;
       }
       setRole(normalized);
-      const fullName = typeof profile?.full_name === 'string' ? profile.full_name : '';
-      setUserName(fullName.trim() || user.email || 'User');
       setLoading(false);
     };
     fetchUserAndRole();
   }, [navigate]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
-
   return (
-    <div className="page">
-      <nav className="flex items-center justify-between px-6 sm:px-8 py-4 bg-white border-b border-slate-200">
-        <div className="flex items-center gap-3">
-          <img src="/cq-logo.png" alt="CQ Logo" className="h-10 w-10 object-contain" />
-          <div>
-            <div className="text-2xl font-bold tracking-tight text-slate-900">CQ Services Portal</div>
-            <div className="helper-text mt-1">Welcome, {userName || userEmail || 'User'}!</div>
-          </div>
+    <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-3xl font-bold text-slate-950 tracking-tight mt-2">Dashboard</div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="btn-secondary"
-        >
-          Log Out
-        </button>
-      </nav>
-      <main className="py-10">
+      </div>
+
+      <div className="mt-6">
         {loading && <div className="text-center text-lg text-slate-500">Loading dashboard...</div>}
         {error && <div className="text-center text-red-600 font-medium mt-8">{error}</div>}
         {!loading && !error && role === 'admin' && <AdminDashboard />}
@@ -92,7 +73,7 @@ export default function Dashboard() {
         {!loading && !error && !role && (
           <div className="text-center text-red-600 font-medium mt-8">Role not found.</div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
