@@ -220,13 +220,13 @@ export default function PwaIconPreviewer() {
 
   return (
     <div
-      className="flex flex-col bg-slate-50 rounded-2xl border border-slate-200 shadow-2xl overflow-hidden select-none"
+      className="card overflow-hidden select-none"
       style={{ height: 800 }}
     >
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-6 py-3 bg-gradient-to-r from-slate-900 to-slate-800 text-white shrink-0">
         <div className="flex items-center gap-2">
-          <Layers size={18} className="text-fuchsia-400" />
+          <Layers size={18} className="text-purple-300" />
           <span className="font-bold tracking-wide text-sm">PWA Icon Previewer</span>
         </div>
         <span className="text-xs text-slate-400">Mask simulator · safe zone checker</span>
@@ -249,7 +249,7 @@ export default function PwaIconPreviewer() {
                   onClick={() => setMaskId(opt.id)}
                   className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                     maskId === opt.id
-                      ? 'bg-fuchsia-600 text-white shadow'
+                      ? 'bg-purple-600 text-white shadow-sm'
                       : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
@@ -284,7 +284,7 @@ export default function PwaIconPreviewer() {
             </p>
             <div className="flex justify-center">
               <div
-                className="w-14 h-14 bg-gradient-to-br from-fuchsia-500 to-purple-800 shadow-inner transition-all duration-300"
+                className="w-14 h-14 bg-gradient-to-br from-purple-500 to-slate-900 shadow-inner transition-all duration-300 rounded-lg"
                 style={{ borderRadius: mask.borderRadius }}
               />
             </div>
@@ -343,7 +343,7 @@ export default function PwaIconPreviewer() {
             <div className="text-center">
               <p
                 className={`text-xs font-bold transition-colors ${
-                  hoveredSize === '512' ? 'text-fuchsia-600' : 'text-slate-700'
+                  hoveredSize === '512' ? 'text-purple-700' : 'text-slate-700'
                 }`}
               >
                 512 × 512
@@ -368,7 +368,7 @@ export default function PwaIconPreviewer() {
             <div className="text-center">
               <p
                 className={`text-xs font-bold transition-colors ${
-                  hoveredSize === '192' ? 'text-fuchsia-600' : 'text-slate-700'
+                  hoveredSize === '192' ? 'text-purple-700' : 'text-slate-700'
                 }`}
               >
                 192 × 192
@@ -421,7 +421,7 @@ export default function PwaIconPreviewer() {
                 {mask.files.map((f, i) => (
                   <span
                     key={i}
-                    className="text-[11px] font-mono bg-fuchsia-50 text-fuchsia-800 rounded px-2 py-0.5 border border-fuchsia-200"
+                    className="text-[11px] font-mono bg-purple-50 text-purple-900 rounded px-2 py-0.5 border border-purple-200"
                   >
                     {f}
                   </span>

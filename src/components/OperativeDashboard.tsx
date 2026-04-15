@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { MapPin } from 'lucide-react';
+import { notifyUsers } from '../lib/notifications';
 
-const STATUSES = ['Open', 'In Progress', 'Completed', 'Archived'] as const;
+const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number] | 'Unknown';
+type StatusFilter = TaskStatus | 'All';
 
 function normalizeStatus(status: unknown): TaskStatus {
   if (typeof status !== 'string') return 'Unknown';
@@ -18,7 +20,7 @@ const OperativeDashboard = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<TaskStatus>('Open');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [userId, setUserId] = useState<string | null>(null);
 
   const handleCardClick = (taskId: string) => {
@@ -67,9 +69,24 @@ const OperativeDashboard = () => {
         setAssigningId(null);
         return;
       }
-      // Set assigned_to and (if missing) move to In Progress.
-      // Guard with `is('assigned_to', null)` so we don't steal already-assigned jobs.
-      const nextStatus = task?.status ? task.status : 'In Progress';
+
+      // Sanity check: FK expects assigned_to to reference an existing profiles row.
+      const { data: profileRow, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileErr) {
+        alert(`Assignment failed (profile lookup error): ${profileErr.message}`);
+        return;
+      }
+      if (!profileRow?.id) {
+        alert(`Assignment failed: no profile row exists for your user id (${user.id}).`);
+        return;
+      }
+
+      // Set assigned_to. Guard with `is('assigned_to', null)` so we don't steal already-assigned jobs.
+      const nextStatus = task?.status ? task.status : 'Open';
       const { data, error } = await supabase
         .from('tasks')
         .update({ assigned_to: user.id, status: nextStatus })
@@ -77,7 +94,8 @@ const OperativeDashboard = () => {
         .is('assigned_to', null)
         .select('id');
       if (error) {
-        alert(`Assignment failed: ${error.message}`);
+        // Include details to make DB errors actionable (FK/RLS, etc).
+        alert(`Assignment failed: ${error.message}${error.details ? `\n\n${error.details}` : ''}`);
         return;
       }
       if (!data || data.length === 0) {
@@ -87,9 +105,14 @@ const OperativeDashboard = () => {
       }
       if (!error) {
         alert('Job Assigned!');
+        notifyUsers({
+          userIds: [user.id],
+          title: 'Job assigned to you',
+          body: `You claimed: ${task?.title ?? 'a job'}`,
+          link: `/task/${taskId}`,
+          type: 'task_assigned',
+        });
         await fetchTasks();
-      } else {
-        alert(`Assignment failed: ${error.message}`);
       }
     } finally {
       setAssigningId(null);
@@ -105,26 +128,27 @@ const OperativeDashboard = () => {
     init();
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="text-slate-500">Loading...</div>;
 
   const visibleTasks = tasks
     .filter(task => {
       if (activeTab === 'available') return !task.assigned_to;
       return !!userId && task.assigned_to === userId;
     })
-    .filter(task => normalizeStatus(task.status) === statusFilter);
+    .filter(task => statusFilter === 'All' ? true : normalizeStatus(task.status) === statusFilter);
 
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Jobs</h2>
+        <h2 className="page-title">Jobs</h2>
         <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-slate-600">Status</div>
+          <div className="text-sm font-medium text-slate-700">Status</div>
           <select
-            className="border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 font-medium"
+            className="input w-auto px-3 py-2.5"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as TaskStatus)}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           >
+            <option value="All">All</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -132,47 +156,62 @@ const OperativeDashboard = () => {
           </select>
         </div>
       </div>
-      <div className="flex space-x-4 mb-6">
+      <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 mb-6">
         <button
-          className={`px-6 py-2 rounded-t-lg font-semibold transition border-b-4 focus:outline-none ${activeTab === 'available' ? 'bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white border-fuchsia-600 shadow' : 'bg-white text-slate-500 border-transparent hover:text-fuchsia-600'}`}
+          type="button"
+          className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+            activeTab === 'available'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-50'
+          }`}
           onClick={() => setActiveTab('available')}
         >
           Available Jobs
         </button>
         <button
-          className={`px-6 py-2 rounded-t-lg font-semibold transition border-b-4 focus:outline-none ${activeTab === 'my' ? 'bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white border-fuchsia-600 shadow' : 'bg-white text-slate-500 border-transparent hover:text-fuchsia-600'}`}
+          type="button"
+          className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+            activeTab === 'my'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-50'
+          }`}
           onClick={() => setActiveTab('my')}
         >
           My Assigned Jobs
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
         {visibleTasks.map(task => (
             <div
               key={task.id}
-              className="relative bg-white border border-purple-100 rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 p-8 flex flex-col min-h-[220px] cursor-pointer group"
+              className="relative card p-6 flex flex-col min-h-[220px] cursor-pointer hover:bg-slate-50 transition-colors"
               onClick={() => handleCardClick(task.id)}
             >
               {/* Status Pill */}
               <div className="absolute top-6 right-6">
-                <span className="bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm drop-shadow glow-pulse">
+                <span className="bg-slate-100 text-slate-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200">
                   {task.status || 'Unassigned'}
                 </span>
               </div>
               <div className="flex flex-col gap-4 flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="text-2xl font-bold text-slate-800 flex-1">{task.title}</div>
+                  <div className="text-lg font-semibold text-slate-900 flex-1">{task.title}</div>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600 font-semibold mb-1">
-                  <MapPin size={18} className="text-purple-400" />
-                  <span className="font-medium text-slate-800">{task.location || task.site || '-'}</span>
+                <div className="flex items-center gap-2 text-slate-500">
+                  <MapPin size={18} className="text-purple-600" />
+                  <span className="font-medium text-slate-900">{task.location || task.site || '-'}</span>
                 </div>
-                <div className="text-slate-600 font-semibold mb-1">Due Date: <span className="font-medium text-slate-800">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</span></div>
+                <div className="text-sm text-slate-500">
+                  Due date:{' '}
+                  <span className="font-medium text-slate-900">
+                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}
+                  </span>
+                </div>
               </div>
               {activeTab === 'available' ? (
                 <button
                   type="button"
-                  className="mt-8 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 rounded-lg shadow-md transition-all duration-300"
+                  className="btn-primary w-full mt-6"
                   onClick={e => { e.preventDefault(); e.stopPropagation(); handleAssign(task.id); }}
                   disabled={assigningId === task.id || !userId}
                 >
@@ -181,13 +220,15 @@ const OperativeDashboard = () => {
               ) : (
                 <div className="mt-8 flex gap-3 w-full">
                   <button
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 rounded-lg shadow-md transition-all duration-300"
+                    type="button"
+                    className="btn-secondary flex-1"
                     onClick={e => { e.stopPropagation(); handleCardClick(task.id); }}
                   >
                     View Details
                   </button>
                   <button
-                    className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold transition-all duration-200 disabled:opacity-60"
+                    type="button"
+                    className="btn-danger flex-1"
                     onClick={e => { e.stopPropagation(); handleUnassign(task.id); }}
                     disabled={unassigningId === task.id}
                   >

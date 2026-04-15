@@ -28,35 +28,35 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">CQ Services Portal</h1>
+    <div className="page flex items-center justify-center px-4">
+      <div className="card card-pad w-full max-w-md">
+        <h1 className="page-title text-center mb-6">CQ Services Portal</h1>
         
         {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+          <div className="text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4" role="alert">
             <p>{error}</p>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Email</label>
+            <label className="label">Email</label>
             <input 
               type="email" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input"
               required
             />
           </div>
           
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Password</label>
+            <label className="label">Password</label>
             <input 
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input"
               required
             />
           </div>
@@ -64,7 +64,7 @@ export default function Login() {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="btn-primary w-full"
           >
             {loading ? 'Logging in...' : 'Log In'}
           </button>

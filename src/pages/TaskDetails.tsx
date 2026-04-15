@@ -4,9 +4,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { notifyUsers } from '../lib/notifications';
 import jsPDF from 'jspdf';
 
-const STATUSES = ['Open', 'In Progress', 'Completed', 'Archived'] as const;
+const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
 type UserRole = 'admin' | 'operative' | null;
 
@@ -123,6 +124,17 @@ const TaskDetails = () => {
         .single();
       if (fetchErr) throw fetchErr;
       setTask(newTask);
+
+      const assignedTo = (newTask as any)?.assigned_to as string | null | undefined;
+      if (assignedTo) {
+        notifyUsers({
+          userIds: [assignedTo],
+          title: 'Job status updated',
+          body: `Status changed to ${nextStatus}: ${newTask?.title ?? 'a job'}`,
+          link: `/task/${id}`,
+          type: 'task_status',
+        });
+      }
     } catch (e: any) {
       alert(e?.message ?? 'Failed to update status');
     } finally {
@@ -164,6 +176,48 @@ const TaskDetails = () => {
 
       const chosen = operatives.find((o) => o.id === selectedOperativeId);
       setAssignedOperativeLabel(chosen?.label || selectedOperativeId);
+
+      // Notify the operative they were assigned.
+      notifyUsers({
+        userIds: [selectedOperativeId],
+        title: 'Job assigned to you',
+        body: `You have been assigned: ${newTask?.title ?? 'a job'}`,
+        link: `/task/${id}`,
+        type: 'task_assigned',
+      });
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to assign');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleAdminAssignToMe = async () => {
+    if (!id || !currentUserId) return;
+    if (task?.assigned_to && task.assigned_to !== currentUserId) {
+      const ok = window.confirm('This job is currently assigned to someone else. Reassign to you?');
+      if (!ok) return;
+    }
+    setAssigning(true);
+    try {
+      const { error: updateErr } = await supabase
+        .from('tasks')
+        .update({ assigned_to: currentUserId })
+        .eq('id', id);
+      if (updateErr) throw updateErr;
+
+      const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
+      setTask(newTask);
+      setSelectedOperativeId(currentUserId);
+      setAssignedOperativeLabel('You');
+
+      notifyUsers({
+        userIds: [currentUserId],
+        title: 'Job assigned to you',
+        body: `You were assigned: ${newTask?.title ?? 'a job'}`,
+        link: `/task/${id}`,
+        type: 'task_assigned',
+      });
     } catch (e: any) {
       alert(e?.message ?? 'Failed to assign');
     } finally {
@@ -179,9 +233,17 @@ const TaskDetails = () => {
       const user = userData?.user;
       if (!user?.id) throw new Error('Not logged in');
 
+      const { data: profileRow, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileErr) throw profileErr;
+      if (!profileRow?.id) throw new Error(`No profile row exists for your user id (${user.id}).`);
+
       const { error: updateErr } = await supabase
         .from('tasks')
-        .update({ assigned_to: user.id, status: 'In Progress' })
+        .update({ assigned_to: user.id, status: 'Open' })
         .eq('id', id)
         .is('assigned_to', null);
       if (updateErr) throw updateErr;
@@ -190,8 +252,16 @@ const TaskDetails = () => {
       setTask(newTask);
       setSelectedOperativeId(user.id);
       setAssignedOperativeLabel('You');
+
+      notifyUsers({
+        userIds: [user.id],
+        title: 'Job assigned to you',
+        body: `You claimed: ${newTask?.title ?? 'a job'}`,
+        link: `/task/${id}`,
+        type: 'task_assigned',
+      });
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to assign job');
+      alert(`${e?.message ?? 'Failed to assign job'}${e?.details ? `\n\n${e.details}` : ''}`);
     } finally {
       setAssigning(false);
     }
@@ -218,6 +288,19 @@ const TaskDetails = () => {
         { task_id: id, user_id: user.id, user_name: user.email, content: newComment }
       ]);
       setNewComment('');
+
+      // Notify assigned operative (if any) except the commenter.
+      const assignedTo = (task as any)?.assigned_to as string | null | undefined;
+      if (assignedTo && assignedTo !== user.id) {
+        notifyUsers({
+          userIds: [assignedTo],
+          title: 'New job update',
+          body: `New message on: ${task?.title ?? 'a job'}`,
+          link: `/task/${id}`,
+          type: 'task_comment',
+        });
+      }
+
       // Refresh comments
       const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', id).order('created_at', { ascending: true });
       setComments(commentsData || []);
@@ -254,42 +337,42 @@ const TaskDetails = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="page p-6">
       <div className="max-w-2xl mx-auto">
         <button
-          className="mb-6 border border-slate-300 text-slate-600 font-semibold py-2 px-6 rounded-lg hover:bg-slate-100 transition"
+          className="btn-secondary mb-6"
           onClick={() => navigate('/dashboard')}
         >
           ← Back to Dashboard
         </button>
-        <div className="bg-white rounded-xl shadow-md p-8">
+        <div className="card card-pad">
           {loading ? (
             <div className="text-slate-500 text-lg text-center">Loading task details...</div>
           ) : error ? (
-            <div className="text-red-600 font-medium text-center">{error}</div>
+            <div className="text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
           ) : !task ? (
             <div className="text-slate-500 text-lg text-center">Task not found.</div>
           ) : (
             <>
               <div className="mb-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-4">{task.title}</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <h2 className="page-title mb-4">{task.title}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                   <div>
-                    <div className="font-bold text-slate-700">Site/Location</div>
+                    <div className="label mb-0">Site/Location</div>
                     <div className="text-slate-800">{task.location || task.site || '-'}</div>
                   </div>
                   <div>
-                    <div className="font-bold text-slate-700">Category</div>
+                    <div className="label mb-0">Category</div>
                     <div className="text-slate-800">{task.category || '-'}</div>
                   </div>
                   <div>
-                    <div className="font-bold text-slate-700">Due Date</div>
+                    <div className="label mb-0">Due Date</div>
                     <div className="text-slate-800">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</div>
                   </div>
                   <div>
-                    <div className="font-bold text-slate-700">Status</div>
+                    <div className="label mb-0">Status</div>
                     <select
-                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 font-medium disabled:opacity-60"
+                      className="input mt-1"
                       value={task.status || 'Open'}
                       onChange={(e) => updateStatus(e.target.value as TaskStatus)}
                       disabled={updatingStatus}
@@ -303,10 +386,10 @@ const TaskDetails = () => {
                 {/* Assignment section (admin) */}
                 {userRole === 'admin' && (
                   <div className="mb-6">
-                    <div className="font-bold text-slate-700 mb-2">Assigned Operative</div>
+                    <div className="label">Assignment</div>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <select
-                        className="w-full sm:flex-1 border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 font-medium disabled:opacity-60"
+                        className="input w-full sm:flex-1"
                         value={selectedOperativeId}
                         onChange={(e) => setSelectedOperativeId(e.target.value)}
                         disabled={assigning}
@@ -316,18 +399,26 @@ const TaskDetails = () => {
                           <option key={o.id} value={o.id}>{o.label}</option>
                         ))}
                       </select>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
                         <button
                           type="button"
-                          className="bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+                          className="btn-primary w-full"
                           onClick={handleAssignOperative}
                           disabled={assigning || !selectedOperativeId}
                         >
-                          {assigning ? 'Saving…' : 'Assign'}
+                          {assigning ? 'Saving…' : 'Assign operative'}
                         </button>
                         <button
                           type="button"
-                          className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold transition-all duration-200 disabled:opacity-60"
+                          className="btn-primary w-full"
+                          onClick={handleAdminAssignToMe}
+                          disabled={assigning || !currentUserId}
+                        >
+                          {assigning ? 'Saving…' : 'Assign to me'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary w-full"
                           onClick={handleUnassign}
                           disabled={assigning || !task.assigned_to}
                         >
@@ -342,20 +433,23 @@ const TaskDetails = () => {
                     )}
                   </div>
                 )}
-                <h3 className="font-bold text-slate-700">Notes</h3>
-                <p className="text-slate-600 bg-slate-50 p-4 rounded mt-2">{task.notes || <span className="italic text-slate-400">No notes provided.</span>}</p>
-                <button
-                  onClick={generatePDF}
-                  className="mt-6 px-4 py-2 border-2 border-purple-600 text-purple-600 font-semibold rounded-lg hover:bg-purple-50 transition-all"
-                >
-                  Download PDF
-                </button>
+                <div className="mt-6">
+                  <h3 className="section-title">Notes</h3>
+                  <p className="text-slate-600 bg-slate-50 border border-slate-200 p-4 rounded-lg mt-2">
+                    {task.notes || <span className="italic text-slate-400">No notes provided.</span>}
+                  </p>
+                  <div className="mt-4">
+                    <button onClick={generatePDF} className="btn-secondary">
+                      Download PDF
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {userRole === 'operative' && !task.assigned_to && (
+              {userRole !== 'admin' && !task.assigned_to && (
                 <button
                   type="button"
-                  className="w-full mt-4 bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-3 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+                  className="btn-primary w-full mt-2"
                   onClick={handleAssignToMe}
                   disabled={assigning || !currentUserId}
                 >
@@ -363,8 +457,8 @@ const TaskDetails = () => {
                 </button>
               )}
               <div className="mt-12">
-                <div className="text-xl font-bold text-slate-800 mb-4">Job Updates & Chat</div>
-                <div className="bg-slate-50 rounded-lg p-4 mb-4 min-h-[120px] max-h-72 overflow-y-auto border border-slate-100">
+                <div className="section-title mb-4">Job Updates</div>
+                <div className="bg-slate-50 rounded-lg p-4 mb-4 min-h-[120px] max-h-72 overflow-y-auto border border-slate-200">
                   {comments.length === 0 ? (
                     <div className="text-slate-400 text-center italic">No updates yet. Start the conversation below!</div>
                   ) : (
@@ -390,7 +484,7 @@ const TaskDetails = () => {
                 <form onSubmit={handleSendMessage} className="flex items-end space-x-2">
                   <input
                     type="text"
-                    className="flex-1 border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800 bg-white"
+                    className="input flex-1"
                     placeholder="Type a message..."
                     value={newComment}
                     onChange={e => setNewComment(e.target.value)}
@@ -398,7 +492,7 @@ const TaskDetails = () => {
                   />
                   <button
                     type="submit"
-                    className="bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-2 px-6 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+                    className="btn-primary w-auto"
                     disabled={sending || !newComment.trim() || uploading}
                   >
                     {sending ? 'Sending...' : 'Send Message'}
@@ -413,7 +507,7 @@ const TaskDetails = () => {
                   />
                   <button
                     type="button"
-                    className="ml-2 bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-2 px-2 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60 flex items-center"
+                    className="btn-primary w-auto px-3"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     title="Upload Photo"
