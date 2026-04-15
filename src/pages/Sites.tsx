@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { ChevronRight } from 'lucide-react'
 
 type SiteRow = {
   id: string
@@ -93,8 +94,9 @@ export default function Sites() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h2 className="page-title">Sites</h2>
-          <div className="helper-text mt-1">Select a site to view safety documents (RAMS).</div>
+          <p className="text-xs font-bold tracking-widest text-slate-500">SITES</p>
+          <h2 className="page-title mt-1">Sites</h2>
+          <div className="helper-text mt-1">Select a site to open its overview, documents, and tasks.</div>
         </div>
         <button type="button" className="btn-secondary" onClick={() => navigate('/dashboard')}>
           Back
@@ -128,39 +130,34 @@ export default function Sites() {
             <div className="text-slate-600">No sites found.</div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {filtered.map((s) => (
-                <li key={s.id} className="py-1">
-                  <div
-                    className="flex items-center justify-between gap-3 px-1 rounded-lg hover:bg-slate-50 transition"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') navigate(`/sites/${encodeURIComponent(s.id)}`)
-                    }}
-                  >
-                    <div className="min-w-0 flex-1 px-3 py-3">
-                      <span className="font-semibold text-slate-950 break-words">{s.name}</span>
+              {filtered.map((s) => {
+                const detailPath = `/sites/${encodeURIComponent(s.id)}`
+                return (
+                  <li key={s.id} className="py-1">
+                    <div className="flex items-center justify-between gap-3 px-1 rounded-lg hover:bg-slate-50 transition">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left px-3 py-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2"
+                        onClick={() => navigate(detailPath)}
+                      >
+                        <span className="font-semibold text-slate-950 break-words">{s.name}</span>
+                      </button>
+                      <div className="flex items-center gap-2 pr-2 sm:pr-3 shrink-0">
+                        <button
+                          type="button"
+                          className="btn-secondary px-3 py-2.5 text-sm whitespace-nowrap"
+                          onClick={() => navigate(detailPath)}
+                        >
+                          Site Details
+                        </button>
+                        <span className="text-slate-400 hidden sm:inline-flex" aria-hidden>
+                          <ChevronRight size={20} />
+                        </span>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-secondary whitespace-nowrap"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        // If we're in fallback mode, we may not have a real site UUID.
-                        // Prefer the dedicated documents page when we do.
-                        if (source === 'sites_table') {
-                          navigate(`/sites/${encodeURIComponent(s.id)}/documents`)
-                        } else {
-                          navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)
-                        }
-                      }}
-                    >
-                      View docs
-                    </button>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

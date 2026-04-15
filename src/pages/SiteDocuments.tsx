@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, FileText, Image as ImageIcon, Upload } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { getSiteDocumentsPublicUrl, SITE_DOCUMENTS_BUCKET } from '../lib/siteDocumentsStorage'
 
 type SiteRow = {
   id: string
@@ -45,8 +46,10 @@ export default function SiteDocuments() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return files
-    return files.filter((f) => f.file_name.toLowerCase().includes(q))
+    const list = !q ? files : files.filter((f) => f.file_name.toLowerCase().includes(q))
+    return [...list].sort((a, b) =>
+      a.file_name.localeCompare(b.file_name, undefined, { sensitivity: 'base' })
+    )
   }, [files, search])
 
   const load = async () => {
@@ -98,7 +101,7 @@ export default function SiteDocuments() {
     setError('')
     try {
       const path = `${id}/${Date.now()}-${file.name}`
-      const { error: upErr } = await supabase.storage.from('site-documents').upload(path, file, {
+      const { error: upErr } = await supabase.storage.from(SITE_DOCUMENTS_BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
       })
@@ -133,8 +136,6 @@ export default function SiteDocuments() {
     await handleUpload(f)
   }
 
-  const fileUrl = (row: SiteFileRow) => supabase.storage.from('site-documents').getPublicUrl(row.file_path).data.publicUrl
-
   return (
     <div className="max-w-3xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
@@ -143,7 +144,8 @@ export default function SiteDocuments() {
             <ChevronLeft size={18} />
             Back
           </button>
-          <div className="text-3xl font-bold text-slate-950 tracking-tight mt-2 break-words">
+          <p className="text-xs font-bold tracking-widest text-slate-500 mt-3">SITE DOCUMENTS</p>
+          <div className="text-3xl font-bold text-slate-950 tracking-tight mt-1 break-words">
             {site?.name ?? (loading ? 'Loading…' : 'Site')}
           </div>
         </div>
@@ -187,7 +189,7 @@ export default function SiteDocuments() {
           ) : (
             <ul className="space-y-2">
               {filtered.map((f) => {
-                const url = fileUrl(f)
+                const url = getSiteDocumentsPublicUrl(f.file_path)
                 return (
                   <li key={f.id} className="border border-slate-200 rounded-2xl p-4 shadow-sm bg-white">
                     <div className="flex items-start justify-between gap-3">
@@ -200,9 +202,23 @@ export default function SiteDocuments() {
                           Uploaded {f.created_at ? new Date(f.created_at).toLocaleString() : ''}
                         </div>
                       </div>
-                      <a className="btn-secondary rounded-full px-5" href={url} target="_blank" rel="noreferrer">
-                        View
-                      </a>
+                      {url ? (
+                        <a
+                          className="btn-secondary rounded-full px-5 shrink-0 min-h-[44px] inline-flex items-center justify-center"
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span
+                          className="btn-secondary rounded-full px-5 shrink-0 min-h-[44px] inline-flex items-center justify-center opacity-50 cursor-not-allowed"
+                          title="Missing file path in database"
+                        >
+                          View
+                        </span>
+                      )}
                     </div>
                   </li>
                 )
