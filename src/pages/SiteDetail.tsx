@@ -288,14 +288,14 @@ export default function SiteDetail() {
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(site?.name ?? '')}`)}
-              disabled={!site?.name}
+              onClick={() => navigate(`/sites/${encodeURIComponent(site?.id ?? '')}/documents`)}
+              disabled={!site?.id}
             >
               View docs
             </button>
           </div>
           <div className="helper-text mt-2">
-            This list shows files you upload here (bucket: <span className="font-semibold">site-documents</span>).
+            View and search documents uploaded for this site.
           </div>
 
           {uploadedUrls.length === 0 ? (
