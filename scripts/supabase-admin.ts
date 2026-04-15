@@ -50,6 +50,9 @@ Examples:
   npx tsx scripts/supabase-admin.ts set-name --email someone@company.com --name "Jane Doe"
   npx tsx scripts/supabase-admin.ts create-operative --email op1@example.com --name "Op One"
   npx tsx scripts/supabase-admin.ts create-operative --email op2@example.com --name "Op Two" --password "TempPass123!"
+  npx tsx scripts/supabase-admin.ts check-profile --email someone@company.com
+  npx tsx scripts/supabase-admin.ts backfill-profiles
+  npx tsx scripts/supabase-admin.ts reset-password --email someone@company.com --password "NewPass123!"
 
 Commands:
   health
@@ -58,6 +61,9 @@ Commands:
   set-role --email <email> --role <admin|operative>
   set-name --email <email> --name <full name>
   create-operative --email <email> --name <full name> [--password <password>]
+  check-profile --email <email>
+  backfill-profiles
+  reset-password --email <email> --password <new password>
 `.trim())
   process.exit(1)
 }
@@ -201,6 +207,97 @@ async function main() {
         2,
       ),
     )
+    return
+  }
+
+  if (cmd === 'check-profile') {
+    const email = parseFlag(process.argv, '--email')
+    if (!email) usage()
+
+    const { data: users, error: usersErr } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    if (usersErr) throw usersErr
+
+    const match = users.users.find((u) => (u.email ?? '').toLowerCase() === email.toLowerCase())
+    if (!match?.id) throw new Error(`No auth user found for email: ${email}`)
+
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', match.id)
+      .maybeSingle()
+    if (profileErr) throw profileErr
+
+    console.log(
+      JSON.stringify(
+        {
+          email: match.email,
+          id: match.id,
+          has_profile: !!profile,
+          profile,
+        },
+        null,
+        2,
+      ),
+    )
+    return
+  }
+
+  if (cmd === 'backfill-profiles') {
+    const { data: users, error: usersErr } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    if (usersErr) throw usersErr
+
+    const rows = users.users.map((u) => {
+      const meta = (u.user_metadata ?? {}) as Record<string, unknown>
+      const fullName = typeof meta.full_name === 'string' ? meta.full_name : ''
+      const role = typeof meta.role === 'string' ? meta.role : 'operative'
+      return {
+        id: u.id,
+        full_name: fullName,
+        role,
+      }
+    })
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(rows, { onConflict: 'id' })
+      .select('id')
+    if (error) throw error
+
+    console.log(JSON.stringify({ upserted_profiles: data?.length ?? 0 }, null, 2))
+    return
+  }
+
+  if (cmd === 'reset-password') {
+    const email = parseFlag(process.argv, '--email')
+    const password = parseFlag(process.argv, '--password')
+    if (!email || !password) usage()
+
+    const newPassword = password.trim()
+    if (newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters.')
+    }
+
+    const { data: users, error: usersErr } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    if (usersErr) throw usersErr
+
+    const match = users.users.find((u) => (u.email ?? '').toLowerCase() === email.toLowerCase())
+    if (!match?.id) throw new Error(`No auth user found for email: ${email}`)
+
+    const { error: updateErr } = await supabase.auth.admin.updateUserById(match.id, {
+      password: newPassword,
+    })
+    if (updateErr) throw updateErr
+
+    console.log(`Password reset for ${email}`)
     return
   }
 

@@ -8,6 +8,8 @@ import NewTask from './pages/NewTask';
 import TaskDetails from './pages/TaskDetails';
 import MainLayout from './components/MainLayout';
 import PwaIconPreviewer from './pages/PwaIconPreviewer';
+import SafetyDocuments from './pages/SafetyDocuments';
+import Sites from './pages/Sites';
 
 function InviteRedirect() {
   const navigate = useNavigate();
@@ -56,6 +58,22 @@ function App() {
           element={
             <MainLayout>
               <TaskDetails />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/safety-documents"
+          element={
+            <MainLayout>
+              <SafetyDocuments />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/sites"
+          element={
+            <MainLayout>
+              <Sites />
             </MainLayout>
           }
         />

@@ -6,6 +6,14 @@ import OperativeDashboard from '../components/OperativeDashboard';
 
 type UserRole = 'admin' | 'operative' | null;
 
+function normalizeRole(role: unknown): UserRole {
+  if (typeof role !== 'string') return null;
+  const r = role.trim().toLowerCase();
+  if (r === 'admin') return 'admin';
+  if (r === 'operative') return 'operative';
+  return null;
+}
+
 export default function Dashboard() {
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
@@ -33,12 +41,13 @@ export default function Dashboard() {
         .select('*')
         .eq('id', user.id)
         .single();
-      if (dbError || !profileData?.role) {
+      const normalized = normalizeRole((profileData as any)?.role);
+      if (dbError || !normalized) {
         setError(`Unable to fetch user role. ${dbError?.message ?? 'No role found.'}`);
         setLoading(false);
         return;
       }
-      setRole(profileData.role);
+      setRole(normalized);
       const fullName = (profileData as any)?.full_name as string | undefined;
       setUserName(fullName?.trim() || user.email || 'User');
       setLoading(false);
@@ -52,18 +61,18 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="flex items-center justify-between px-8 py-4 bg-white shadow-sm border-b border-slate-100">
+    <div className="page">
+      <nav className="flex items-center justify-between px-6 sm:px-8 py-4 bg-white border-b border-slate-200">
         <div className="flex items-center gap-3">
           <img src="/cq-logo.png" alt="CQ Logo" className="h-10 w-10 object-contain" />
           <div>
-            <div className="text-2xl font-bold text-slate-800 tracking-tight">CQ Services Portal</div>
-            <div className="text-slate-600 text-base mt-1">Welcome, {userName || userEmail || 'User'}!</div>
+            <div className="text-2xl font-bold tracking-tight text-slate-900">CQ Services Portal</div>
+            <div className="helper-text mt-1">Welcome, {userName || userEmail || 'User'}!</div>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition"
+          className="btn-secondary"
         >
           Log Out
         </button>

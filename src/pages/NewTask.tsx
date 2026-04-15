@@ -72,26 +72,26 @@ export default function NewTask() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="page p-6">
       <div className="max-w-2xl mx-auto">
         <button
           type="button"
-          className="mb-6 border border-slate-300 text-slate-600 font-semibold py-2 px-6 rounded-lg hover:bg-slate-100 transition"
+          className="btn-secondary mb-6"
           onClick={() => navigate('/dashboard')}
           disabled={loading}
         >
           ← Back to Dashboard
         </button>
-        <div className="bg-white rounded-xl shadow-md p-8">
-        <h2 className="text-3xl font-bold text-slate-800 mb-8">Create New Task</h2>
-        {error && <div className="mb-4 text-red-600 font-medium">{error}</div>}
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="card card-pad">
+        <h2 className="page-title mb-6">Create New Task</h2>
+        {error && <div className="mb-4 text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-slate-700 font-semibold mb-2">Title</label>
+              <label className="label">Title</label>
               <input
                 type="text"
-                className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800"
+                className="input"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 required
@@ -99,9 +99,9 @@ export default function NewTask() {
               />
             </div>
             <div>
-              <label className="block text-slate-700 font-semibold mb-2">Category</label>
+              <label className="label">Category</label>
               <select
-                className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800"
+                className="input"
                 value={category}
                 onChange={e => setCategory(e.target.value)}
                 required
@@ -113,10 +113,10 @@ export default function NewTask() {
               </select>
             </div>
             <div>
-              <label className="block text-slate-700 font-semibold mb-2">Site / Location</label>
+              <label className="label">Site / Location</label>
               <input
                 type="text"
-                className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800"
+                className="input"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
                 required
@@ -125,20 +125,20 @@ export default function NewTask() {
             </div>
             <div className="flex flex-col md:flex-row md:space-x-4">
               <div className="flex-1 mb-2 md:mb-0">
-                <label className="block text-slate-700 font-semibold mb-2">Date Added</label>
+                <label className="label">Date Added</label>
                 <input
                   type="text"
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2 bg-slate-100 text-slate-500 cursor-not-allowed"
+                  className="input bg-slate-100 text-slate-500 cursor-not-allowed"
                   value={today}
                   readOnly
                   tabIndex={-1}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-slate-700 font-semibold mb-2">Due Date</label>
+                <label className="label">Due Date</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800"
+                  className="input"
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
                   required
@@ -148,35 +148,35 @@ export default function NewTask() {
             </div>
           </div>
           <div>
-            <label className="block text-slate-700 font-semibold mb-2">Notes</label>
+            <label className="label">Notes</label>
             <textarea
-              className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 text-slate-800 min-h-[100px]"
+              className="input min-h-[120px]"
               value={notes}
               onChange={e => setNotes(e.target.value)}
               disabled={loading}
             />
           </div>
           <div>
-            <label className="block text-slate-700 font-semibold mb-2">Upload Files/Images</label>
+            <label className="label">Upload Files/Images</label>
             <input
               type="file"
               multiple
-              className="block w-full text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-purple-800 file:to-fuchsia-600 file:text-white hover:file:opacity-90"
+              className="block w-full text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
               onChange={handleFileChange}
               disabled={loading}
             />
           </div>
-          <div className="flex items-center space-x-4 mt-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2">
             <button
               type="submit"
-              className="bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-2 px-6 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+              className="btn-primary w-full sm:w-auto"
               disabled={loading}
             >
               {loading ? 'Saving Job...' : 'Submit Job'}
             </button>
             <button
               type="button"
-              className="border border-slate-300 text-slate-600 font-semibold py-2 px-6 rounded-lg hover:bg-slate-50 transition"
+              className="btn-secondary w-full sm:w-auto"
               onClick={() => navigate('/dashboard')}
               disabled={loading}
             >

@@ -36,35 +36,35 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="bg-white rounded-xl shadow-md p-8 w-full max-w-md">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">Welcome to CQ Sealants</h2>
+    <div className="page flex items-center justify-center px-4">
+      <div className="card card-pad w-full max-w-md">
+        <h2 className="page-title mb-6 text-center">Welcome to CQ Sealants</h2>
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">Full Name</label>
+            <label className="label">Full name</label>
             <input
               type="text"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+              className="input"
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               required
             />
           </div>
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">Email</label>
+            <label className="label">Email</label>
             <input
               type="email"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+              className="input"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
             />
           </div>
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">Password</label>
+            <label className="label">Password</label>
             <input
               type="password"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+              className="input"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
@@ -73,7 +73,7 @@ const Register = () => {
           {error && <div className="text-red-600 text-center font-medium">{error}</div>}
           <button
             type="submit"
-            className="w-full bg-purple-600 text-white font-bold py-3 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+            className="btn-primary w-full"
             disabled={loading}
           >
             {loading ? 'Creating Account...' : 'Create Account'}

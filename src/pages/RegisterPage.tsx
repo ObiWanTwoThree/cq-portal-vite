@@ -74,24 +74,24 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 sm:px-6 box-border">
+    <div className="page w-full flex flex-col items-center justify-center px-4 sm:px-6 box-border">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="bg-white p-6 sm:p-8 rounded-xl shadow-md w-full max-w-sm space-y-4"
+        className="card card-pad w-full max-w-sm space-y-6"
       >
         <div className="flex justify-center mb-2">
           <img src="/cq-logo.png" alt="CQ Logo" className="h-20 w-20 object-contain" />
         </div>
-        <h1 className="text-xl font-bold text-center text-slate-800 break-words">Set Your Password</h1>
+        <h1 className="page-title text-center break-words">Set Your Password</h1>
 
         {errorMsg && (
-          <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p className="text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {errorMsg}
           </p>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Your name</label>
+          <label className="label">Your name</label>
           <input type="text" {...register('fullName')} className="input" />
           {errors.fullName && (
             <p className="text-red-500 text-sm mt-1">{errors.fullName.message}</p>
@@ -99,7 +99,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+          <label className="label">New password</label>
           <input type="password" {...register('password')} className="input" />
           {errors.password && (
             <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
@@ -107,7 +107,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Confirm Password</label>
+          <label className="label">Confirm password</label>
           <input type="password" {...register('confirmPassword')} className="input" />
           {errors.confirmPassword && (
             <p className="text-red-500 text-sm mt-1">{errors.confirmPassword.message}</p>
