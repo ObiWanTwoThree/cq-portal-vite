@@ -11,6 +11,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import type { NotificationRow } from '../lib/notifications';
 
+type ProfileRow = {
+  id: string
+  full_name?: unknown
+}
+
 interface MainLayoutProps {
   /**
    * Optional override. If omitted, we fetch `profiles.full_name` (fallback: email).
@@ -28,20 +33,20 @@ const navLinks = [
 
 export default function MainLayout({ userName = 'User', children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState(userName);
+  // Only used when we need to fetch the name from profiles.
+  const [displayName, setDisplayName] = useState<string>('User');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
+  const effectiveName = userName && userName !== 'User' ? userName : displayName;
+
   useEffect(() => {
     let cancelled = false;
 
-    // If caller provides a real name, use it as-is.
-    if (userName && userName !== 'User') {
-      setDisplayName(userName);
-      return;
-    }
+    // If caller provides a real name, avoid fetching.
+    if (userName && userName !== 'User') return;
 
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -54,8 +59,9 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
         .eq('id', user.id)
         .single();
 
-      const fullName = (profile as any)?.full_name as string | undefined;
-      const next = fullName?.trim() || user.email || 'User';
+      const p = (profile ?? null) as ProfileRow | null;
+      const fullName = typeof p?.full_name === 'string' ? p.full_name : '';
+      const next = fullName.trim() || user.email || 'User';
       if (!cancelled) setDisplayName(next);
     };
 
@@ -160,7 +166,7 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       <div className="flex-1 w-full min-w-0 min-h-screen md:ml-64 pb-16 md:pb-0 overflow-x-hidden">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-4 bg-white border-b border-slate-200">
-          <div className="text-base font-semibold text-slate-900">Welcome, {displayName}!</div>
+          <div className="text-base font-semibold text-slate-900">Welcome, {effectiveName}!</div>
           <button
             className="relative p-2 rounded-full hover:bg-slate-100 transition"
             onClick={() => setNotifOpen((v) => !v)}

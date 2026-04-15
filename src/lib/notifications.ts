@@ -33,12 +33,11 @@ export async function notifyUsers(params: {
     const { error } = await supabase.from('notifications').insert(rows)
     // If notifications table/policies aren't set up yet, don't break the app.
     if (error) {
-      // eslint-disable-next-line no-console
       console.warn('notifyUsers failed:', error.message)
     }
-  } catch (e: any) {
-    // eslint-disable-next-line no-console
-    console.warn('notifyUsers failed:', e?.message ?? e)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.warn('notifyUsers failed:', msg)
   }
 }
 

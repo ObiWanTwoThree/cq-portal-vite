@@ -11,6 +11,33 @@ const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
 type UserRole = 'admin' | 'operative' | null;
 
+type ProfileRow = {
+  id: string
+  role?: unknown
+  full_name?: unknown
+}
+
+type TaskRow = {
+  id: string
+  title?: string | null
+  category?: string | null
+  location?: string | null
+  site?: string | null
+  due_date?: string | null
+  status?: string | null
+  notes?: string | null
+  assigned_to?: string | null
+}
+
+type CommentRow = {
+  id: string
+  task_id: string
+  user_id: string
+  user_name: string
+  content: string
+  created_at: string
+}
+
 type OperativeOption = {
   id: string;
   label: string;
@@ -19,10 +46,10 @@ type OperativeOption = {
 const TaskDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [task, setTask] = useState<any>(null);
+  const [task, setTask] = useState<TaskRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [comments, setComments] = useState<any[]>([]);
+  const [comments, setComments] = useState<CommentRow[]>([]);
   const [newComment, setNewComment] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -51,7 +78,9 @@ const TaskDetails = () => {
             .select('*')
             .eq('id', user.id)
             .single();
-          setUserRole((profile as any)?.role ?? null);
+          const p = (profile ?? null) as ProfileRow | null;
+          const r = typeof p?.role === 'string' ? p.role : null;
+          setUserRole((r === 'admin' || r === 'operative') ? (r as UserRole) : null);
         } else {
           setUserRole(null);
         }
@@ -68,19 +97,20 @@ const TaskDetails = () => {
           return;
         }
 
-        setTask(taskRes.data);
-        setComments(commentsRes.data || []);
+        setTask((taskRes.data ?? null) as TaskRow | null);
+        setComments(((commentsRes.data || []) as CommentRow[]));
 
         // Load assigned operative label (name/email fallback) if assigned.
-        const assignedTo = (taskRes.data as any)?.assigned_to as string | null | undefined;
+        const assignedTo = ((taskRes.data ?? null) as TaskRow | null)?.assigned_to ?? null;
         if (assignedTo) {
           const { data: assignedProfile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', assignedTo)
             .single();
-          const assignedName = (assignedProfile as any)?.full_name as string | undefined;
-          setAssignedOperativeLabel(assignedName?.trim() || assignedTo);
+          const ap = (assignedProfile ?? null) as ProfileRow | null;
+          const assignedName = typeof ap?.full_name === 'string' ? ap.full_name : '';
+          setAssignedOperativeLabel(assignedName.trim() || assignedTo);
         } else {
           setAssignedOperativeLabel('');
         }
@@ -92,14 +122,14 @@ const TaskDetails = () => {
           .eq('role', 'operative')
           .order('full_name', { ascending: true });
 
-        const options: OperativeOption[] = (ops || []).map((p: any) => {
-          const name = (p.full_name as string | undefined)?.trim();
+        const options: OperativeOption[] = ((ops || []) as ProfileRow[]).map((p) => {
+          const name = typeof p.full_name === 'string' ? p.full_name.trim() : '';
           return { id: p.id, label: name || p.id };
         });
         setOperatives(options);
         setSelectedOperativeId(assignedTo || '');
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
         setLoading(false);
       }
@@ -123,9 +153,10 @@ const TaskDetails = () => {
         .eq('id', id)
         .single();
       if (fetchErr) throw fetchErr;
-      setTask(newTask);
+      const nextTask = (newTask ?? null) as TaskRow | null;
+      setTask(nextTask);
 
-      const assignedTo = (newTask as any)?.assigned_to as string | null | undefined;
+      const assignedTo = nextTask?.assigned_to ?? null;
       if (assignedTo) {
         notifyUsers({
           userIds: [assignedTo],
@@ -135,8 +166,8 @@ const TaskDetails = () => {
           type: 'task_status',
         });
       }
-    } catch (e: any) {
-      alert(e?.message ?? 'Failed to update status');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to update status');
     } finally {
       setUpdatingStatus(false);
     }
@@ -151,11 +182,11 @@ const TaskDetails = () => {
       const { error: updateErr } = await supabase.from('tasks').update({ assigned_to: null }).eq('id', id);
       if (updateErr) throw updateErr;
       const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
-      setTask(newTask);
+      setTask((newTask ?? null) as TaskRow | null);
       setAssignedOperativeLabel('');
       setSelectedOperativeId('');
-    } catch (e: any) {
-      alert(e?.message ?? 'Failed to unassign');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to unassign');
     } finally {
       setAssigning(false);
     }
@@ -172,7 +203,8 @@ const TaskDetails = () => {
       if (updateErr) throw updateErr;
 
       const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
-      setTask(newTask);
+      const nextTask = (newTask ?? null) as TaskRow | null;
+      setTask(nextTask);
 
       const chosen = operatives.find((o) => o.id === selectedOperativeId);
       setAssignedOperativeLabel(chosen?.label || selectedOperativeId);
@@ -181,12 +213,12 @@ const TaskDetails = () => {
       notifyUsers({
         userIds: [selectedOperativeId],
         title: 'Job assigned to you',
-        body: `You have been assigned: ${newTask?.title ?? 'a job'}`,
+        body: `You have been assigned: ${nextTask?.title ?? 'a job'}`,
         link: `/task/${id}`,
         type: 'task_assigned',
       });
-    } catch (e: any) {
-      alert(e?.message ?? 'Failed to assign');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to assign');
     } finally {
       setAssigning(false);
     }
@@ -207,19 +239,20 @@ const TaskDetails = () => {
       if (updateErr) throw updateErr;
 
       const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
-      setTask(newTask);
+      const nextTask = (newTask ?? null) as TaskRow | null;
+      setTask(nextTask);
       setSelectedOperativeId(currentUserId);
       setAssignedOperativeLabel('You');
 
       notifyUsers({
         userIds: [currentUserId],
         title: 'Job assigned to you',
-        body: `You were assigned: ${newTask?.title ?? 'a job'}`,
+        body: `You were assigned: ${nextTask?.title ?? 'a job'}`,
         link: `/task/${id}`,
         type: 'task_assigned',
       });
-    } catch (e: any) {
-      alert(e?.message ?? 'Failed to assign');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to assign');
     } finally {
       setAssigning(false);
     }
@@ -249,19 +282,22 @@ const TaskDetails = () => {
       if (updateErr) throw updateErr;
 
       const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
-      setTask(newTask);
+      const nextTask = (newTask ?? null) as TaskRow | null;
+      setTask(nextTask);
       setSelectedOperativeId(user.id);
       setAssignedOperativeLabel('You');
 
       notifyUsers({
         userIds: [user.id],
         title: 'Job assigned to you',
-        body: `You claimed: ${newTask?.title ?? 'a job'}`,
+        body: `You claimed: ${nextTask?.title ?? 'a job'}`,
         link: `/task/${id}`,
         type: 'task_assigned',
       });
-    } catch (e: any) {
-      alert(`${e?.message ?? 'Failed to assign job'}${e?.details ? `\n\n${e.details}` : ''}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to assign job';
+      const details = (typeof e === 'object' && e && 'details' in e) ? String((e as { details?: unknown }).details ?? '') : '';
+      alert(`${msg}${details ? `\n\n${details}` : ''}`);
     } finally {
       setAssigning(false);
     }
@@ -290,7 +326,7 @@ const TaskDetails = () => {
       setNewComment('');
 
       // Notify assigned operative (if any) except the commenter.
-      const assignedTo = (task as any)?.assigned_to as string | null | undefined;
+      const assignedTo = task?.assigned_to ?? null;
       if (assignedTo && assignedTo !== user.id) {
         notifyUsers({
           userIds: [assignedTo],
@@ -303,9 +339,10 @@ const TaskDetails = () => {
 
       // Refresh comments
       const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', id).order('created_at', { ascending: true });
-      setComments(commentsData || []);
-    } catch (err: any) {
-      alert('Failed to send message: ' + (err?.message || err));
+      setComments(((commentsData || []) as CommentRow[]));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('Failed to send message: ' + msg);
     }
     setSending(false);
   };
@@ -328,9 +365,10 @@ const TaskDetails = () => {
         { task_id: id, user_id: user.id, user_name: user.email, content: publicUrl }
       ]);
       const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', id).order('created_at', { ascending: true });
-      setComments(commentsData || []);
-    } catch (err: any) {
-      alert('Upload failed: ' + (err?.message || err));
+      setComments(((commentsData || []) as CommentRow[]));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('Upload failed: ' + msg);
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';

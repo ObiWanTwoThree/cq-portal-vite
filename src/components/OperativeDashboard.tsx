@@ -10,6 +10,16 @@ const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number] | 'Unknown';
 type StatusFilter = TaskStatus | 'All';
 
+type TaskRow = {
+  id: string
+  title?: string | null
+  location?: string | null
+  site?: string | null
+  due_date?: string | null
+  status?: string | null
+  assigned_to?: string | null
+}
+
 function normalizeStatus(status: unknown): TaskStatus {
   if (typeof status !== 'string') return 'Unknown';
   return (STATUSES as readonly string[]).includes(status) ? (status as TaskStatus) : 'Unknown';
@@ -17,7 +27,7 @@ function normalizeStatus(status: unknown): TaskStatus {
 
 const OperativeDashboard = () => {
   const [activeTab, setActiveTab] = useState<'available' | 'my'>('available');
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -33,7 +43,7 @@ const OperativeDashboard = () => {
   const fetchTasks = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('tasks').select('*');
-    if (!error && data) setTasks(data);
+    if (!error && data) setTasks(data as TaskRow[]);
     else setTasks([]);
     setLoading(false);
   };

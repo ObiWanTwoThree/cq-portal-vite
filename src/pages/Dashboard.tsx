@@ -6,6 +6,12 @@ import OperativeDashboard from '../components/OperativeDashboard';
 
 type UserRole = 'admin' | 'operative' | null;
 
+type ProfileRow = {
+  id: string
+  role?: unknown
+  full_name?: unknown
+}
+
 function normalizeRole(role: unknown): UserRole {
   if (typeof role !== 'string') return null;
   const r = role.trim().toLowerCase();
@@ -41,15 +47,16 @@ export default function Dashboard() {
         .select('*')
         .eq('id', user.id)
         .single();
-      const normalized = normalizeRole((profileData as any)?.role);
+      const profile = (profileData ?? null) as ProfileRow | null;
+      const normalized = normalizeRole(profile?.role);
       if (dbError || !normalized) {
         setError(`Unable to fetch user role. ${dbError?.message ?? 'No role found.'}`);
         setLoading(false);
         return;
       }
       setRole(normalized);
-      const fullName = (profileData as any)?.full_name as string | undefined;
-      setUserName(fullName?.trim() || user.email || 'User');
+      const fullName = typeof profile?.full_name === 'string' ? profile.full_name : '';
+      setUserName(fullName.trim() || user.email || 'User');
       setLoading(false);
     };
     fetchUserAndRole();

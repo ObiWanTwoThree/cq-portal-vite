@@ -34,7 +34,7 @@ export default function NewTask() {
       setLoading(false);
       return;
     }
-    let image_urls: string[] = [];
+    const image_urls: string[] = [];
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
