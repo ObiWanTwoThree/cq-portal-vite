@@ -7,8 +7,22 @@ create table if not exists public.sites (
   name text not null unique,
   location_description text null,
   sealing_specs text null,
+  postcode text null,
+  latitude double precision null,
+  longitude double precision null,
+  site_manager_name text null,
+  site_manager_phone text null,
+  access_notes text null,
   created_at timestamptz not null default now()
 );
+
+-- Backward-compatible: add columns if the table already existed
+alter table public.sites add column if not exists postcode text null;
+alter table public.sites add column if not exists latitude double precision null;
+alter table public.sites add column if not exists longitude double precision null;
+alter table public.sites add column if not exists site_manager_name text null;
+alter table public.sites add column if not exists site_manager_phone text null;
+alter table public.sites add column if not exists access_notes text null;
 
 create index if not exists sites_name_idx on public.sites(name);
 

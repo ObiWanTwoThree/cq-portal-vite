@@ -21,7 +21,7 @@ export default function Sites() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [sites, setSites] = useState<string[]>([])
+  const [sites, setSites] = useState<SiteRow[]>([])
   const [source, setSource] = useState<'sites_table' | 'tasks_fallback' | null>(null)
 
   useEffect(() => {
@@ -45,9 +45,8 @@ export default function Sites() {
           .order('name', { ascending: true })
 
         if (!sitesErr && (sitesRows ?? []).length > 0) {
-          const names = (sitesRows as SiteRow[]).map((s) => s.name).filter(Boolean)
           if (!cancelled) {
-            setSites(names)
+            setSites((sitesRows as SiteRow[]).filter((s) => Boolean(s?.id && s?.name)))
             setSource('sites_table')
           }
           return
@@ -64,7 +63,7 @@ export default function Sites() {
         const rows = (taskRows ?? []) as TaskSiteRow[]
         const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
         const pool = openTasks.length > 0 ? openTasks : rows
-        const derived = uniqNonEmpty(pool.map((t) => t.location))
+        const derived = uniqNonEmpty(pool.map((t) => t.location)).map((name) => ({ id: name, name }))
 
         if (!cancelled) {
           setSites(derived)
@@ -87,7 +86,7 @@ export default function Sites() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return sites
-    return sites.filter((s) => s.toLowerCase().includes(q))
+    return sites.filter((s) => s.name.toLowerCase().includes(q))
   }, [sites, search])
 
   return (
@@ -130,15 +129,23 @@ export default function Sites() {
           ) : (
             <ul className="divide-y divide-slate-100">
               {filtered.map((s) => (
-                <li key={s}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-3 rounded-lg hover:bg-slate-50 transition flex items-center justify-between gap-3"
-                    onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(s)}`)}
-                  >
-                    <span className="font-semibold text-slate-900 break-words">{s}</span>
-                    <span className="text-sm text-slate-500">View RAMS</span>
-                  </button>
+                <li key={s.id} className="py-1">
+                  <div className="flex items-center justify-between gap-3 px-1">
+                    <button
+                      type="button"
+                      className="min-w-0 text-left flex-1 rounded-lg px-3 py-3 hover:bg-slate-50 transition"
+                      onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}`)}
+                    >
+                      <span className="font-semibold text-slate-950 break-words">{s.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary whitespace-nowrap"
+                      onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)}
+                    >
+                      View docs
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
