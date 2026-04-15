@@ -130,31 +130,34 @@ export default function Sites() {
             <ul className="divide-y divide-slate-100">
               {filtered.map((s) => (
                 <li key={s.id} className="py-1">
-                  <div className="flex items-center justify-between gap-3 px-1">
+                  <div
+                    className="flex items-center justify-between gap-3 px-1 rounded-lg hover:bg-slate-50 transition"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') navigate(`/sites/${encodeURIComponent(s.id)}`)
+                    }}
+                  >
+                    <div className="min-w-0 flex-1 px-3 py-3">
+                      <span className="font-semibold text-slate-950 break-words">{s.name}</span>
+                    </div>
                     <button
                       type="button"
-                      className="min-w-0 text-left flex-1 rounded-lg px-3 py-3 hover:bg-slate-50 transition"
-                      onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}`)}
+                      className="btn-secondary whitespace-nowrap"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        // If we're in fallback mode, we may not have a real site UUID.
+                        // Prefer the dedicated documents page when we do.
+                        if (source === 'sites_table') {
+                          navigate(`/sites/${encodeURIComponent(s.id)}/documents`)
+                        } else {
+                          navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)
+                        }
+                      }}
                     >
-                      <span className="font-semibold text-slate-950 break-words">{s.name}</span>
+                      View docs
                     </button>
-                    {source === 'sites_table' ? (
-                      <button
-                        type="button"
-                        className="btn-secondary whitespace-nowrap"
-                        onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}/documents`)}
-                      >
-                        View docs
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn-secondary whitespace-nowrap"
-                        onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)}
-                      >
-                        View docs
-                      </button>
-                    )}
                   </div>
                 </li>
               ))}

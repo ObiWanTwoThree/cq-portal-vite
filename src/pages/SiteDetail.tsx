@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CloudSun, ExternalLink, FileUp, MapPin, Phone, Droplets, ChevronLeft } from 'lucide-react'
+import { CloudSun, FileUp, MapPin, Phone, Droplets, ChevronLeft, Pencil, X, Save, Plus, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 type SiteRow = {
@@ -24,6 +24,20 @@ type TaskRow = {
   site_id: string | null
   location: string | null
   assigned_to: string | null
+}
+
+type ProfileRow = {
+  id: string
+  role?: unknown
+}
+
+type SiteFileInsert = {
+  site_id: string
+  file_name: string
+  file_path: string
+  mime_type: string | null
+  size_bytes: number | null
+  uploaded_by: string | null
 }
 
 function bulletsFromText(text: string | null | undefined) {
@@ -50,9 +64,41 @@ export default function SiteDetail() {
   const [site, setSite] = useState<SiteRow | null>(null)
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [uploading, setUploading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const [editSeal, setEditSeal] = useState(false)
+  const [editInfo, setEditInfo] = useState(false)
+  const [sealDraft, setSealDraft] = useState('')
+  const [infoDraft, setInfoDraft] = useState({
+    site_manager_name: '',
+    site_manager_phone: '',
+    access_notes: '',
+    location_description: '',
+  })
+
+  const [addingTask, setAddingTask] = useState(false)
+  const [taskDraft, setTaskDraft] = useState({
+    title: '',
+    category: 'Snagging',
+    due_date: '',
+    notes: '',
+  })
+
+  // Keep a small "recent uploads" list for this page (optional, best-effort UX).
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
 
   const sealBullets = useMemo(() => bulletsFromText(site?.sealing_specs), [site?.sealing_specs])
+
+  const refreshTasks = async (s: SiteRow) => {
+    const { data: tRows, error: taskErr } = await supabase
+      .from('tasks')
+      .select('id,title,status,due_date,site_id,location,assigned_to')
+      .or(`site_id.eq.${s.id},and(site_id.is.null,location.ilike.%${s.name.replace(/%/g, '')}%)`)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (!taskErr) setTasks((tRows ?? []) as TaskRow[])
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -63,10 +109,18 @@ export default function SiteDetail() {
       setError('')
       try {
         const { data: auth } = await supabase.auth.getUser()
-        if (!auth?.user) {
+        const user = auth?.user ?? null
+        if (!user) {
           navigate('/login')
           return
         }
+        setCurrentUserId(user.id)
+
+        // Determine admin role for edit controls.
+        const { data: profile } = await supabase.from('profiles').select('id,role').eq('id', user.id).single()
+        const p = (profile ?? null) as ProfileRow | null
+        const role = typeof p?.role === 'string' ? p.role.toLowerCase() : ''
+        setIsAdmin(role === 'admin')
 
         const { data: row, error: siteErr } = await supabase
           .from('sites')
@@ -78,18 +132,16 @@ export default function SiteDetail() {
         if (!s) throw new Error('Site not found')
         if (cancelled) return
         setSite(s)
+        setSealDraft(s.sealing_specs ?? '')
+        setInfoDraft({
+          site_manager_name: s.site_manager_name ?? '',
+          site_manager_phone: s.site_manager_phone ?? '',
+          access_notes: s.access_notes ?? '',
+          location_description: s.location_description ?? '',
+        })
 
         // Active tasks for this site. Prefer site_id; fallback to location match (older data).
-        const { data: tRows, error: taskErr } = await supabase
-          .from('tasks')
-          .select('id,title,status,due_date,site_id,location,assigned_to')
-          .or(`site_id.eq.${s.id},and(site_id.is.null,location.ilike.%${s.name.replace(/%/g, '')}%)`)
-          .order('created_at', { ascending: false })
-          .limit(50)
-        if (!taskErr && !cancelled) setTasks((tRows ?? []) as TaskRow[])
-
-        // Storage listing (best-effort): we can’t list without storage policies. So we only show uploads done in-session.
-        setUploadedUrls([])
+        if (!cancelled) await refreshTasks(s)
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
         if (!cancelled) setError(msg || 'Failed to load site')
@@ -134,6 +186,18 @@ export default function SiteDetail() {
       })
       if (upErr) throw upErr
 
+      // Persist metadata row.
+      const row: SiteFileInsert = {
+        site_id: site.id,
+        file_name: file.name,
+        file_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size || null,
+        uploaded_by: currentUserId,
+      }
+      const { error: insErr } = await supabase.from('site_files').insert(row)
+      if (insErr) throw insErr
+
       const { data: publicUrlData } = supabase.storage.from('site-documents').getPublicUrl(path)
       const url = publicUrlData?.publicUrl
       if (url) setUploadedUrls((prev) => [url, ...prev])
@@ -150,6 +214,80 @@ export default function SiteDetail() {
     const f = e.target.files?.[0]
     if (!f) return
     await handleUpload(f)
+  }
+
+  const subtleEditBtn = (
+    <button
+      type="button"
+      className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-full px-4 py-2 hover:bg-slate-50 transition"
+    >
+      <Pencil size={16} />
+      Edit
+    </button>
+  )
+
+  const saveSeal = async () => {
+    if (!site) return
+    setError('')
+    try {
+      const { error: upErr } = await supabase.from('sites').update({ sealing_specs: sealDraft }).eq('id', site.id)
+      if (upErr) throw upErr
+      setSite({ ...site, sealing_specs: sealDraft })
+      setEditSeal(false)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to save')
+    }
+  }
+
+  const saveInfo = async () => {
+    if (!site) return
+    setError('')
+    try {
+      const payload = {
+        site_manager_name: infoDraft.site_manager_name || null,
+        site_manager_phone: infoDraft.site_manager_phone || null,
+        access_notes: infoDraft.access_notes || null,
+        location_description: infoDraft.location_description || null,
+      }
+      const { error: upErr } = await supabase.from('sites').update(payload).eq('id', site.id)
+      if (upErr) throw upErr
+      setSite({ ...site, ...payload })
+      setEditInfo(false)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to save')
+    }
+  }
+
+  const createTask = async () => {
+    if (!site || !currentUserId) return
+    setError('')
+    try {
+      if (!taskDraft.title.trim()) throw new Error('Task title is required')
+      if (!taskDraft.due_date) throw new Error('Due date is required')
+
+      const { error: insErr } = await supabase.from('tasks').insert([
+        {
+          title: taskDraft.title.trim(),
+          category: taskDraft.category,
+          location: site.name,
+          notes: taskDraft.notes.trim() || null,
+          due_date: taskDraft.due_date,
+          status: 'Open',
+          created_by: currentUserId,
+          site_id: site.id,
+        },
+      ])
+      if (insErr) throw insErr
+
+      setTaskDraft({ title: '', category: 'Snagging', due_date: '', notes: '' })
+      setAddingTask(false)
+      await refreshTasks(site)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to create task')
+    }
   }
 
   return (
@@ -214,7 +352,8 @@ export default function SiteDetail() {
             type="button"
             className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 border border-purple-200 bg-white shadow-sm hover:bg-purple-50 font-semibold text-purple-800 disabled:opacity-60"
             onClick={handlePickUpload}
-            disabled={uploading}
+            disabled={uploading || !isAdmin}
+            title={isAdmin ? 'Upload file/photo' : 'Admin only'}
           >
             <FileUp size={18} className="text-purple-600" />
             {uploading ? 'Uploading…' : 'Upload File/Photo'}
@@ -234,51 +373,175 @@ export default function SiteDetail() {
       {/* Info cards */}
       <div className="grid grid-cols-1 gap-4">
         <div className="card p-4 sm:p-6">
-          <div className="flex items-center gap-2">
-            <Droplets size={18} className="text-purple-600" />
-            <div className="text-lg font-semibold text-slate-950">What to Seal</div>
-          </div>
-          {sealBullets.length === 0 ? (
-            <div className="text-slate-600 mt-3">
-              Add sealing specs in the `sites` table to show a bulleted checklist here.
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Droplets size={18} className="text-purple-600" />
+              <div className="text-lg font-semibold text-slate-950">What to Seal</div>
             </div>
+            {isAdmin && !editSeal && (
+              <div onClick={() => setEditSeal(true)}>{subtleEditBtn}</div>
+            )}
+          </div>
+
+          {!editSeal ? (
+            sealBullets.length === 0 ? (
+              <div className="text-slate-600 mt-3">
+                Add sealing specs in the `sites` table to show a bulleted checklist here.
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {sealBullets.map((b, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-800">
+                    <span className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-600 flex-none" />
+                    <span className="leading-relaxed">{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )
           ) : (
-            <ul className="mt-3 space-y-2">
-              {sealBullets.map((b, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-slate-800">
-                  <span className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-600 flex-none" />
-                  <span className="leading-relaxed">{b}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-4 space-y-3">
+              <label className="label">Sealing specs (one item per line)</label>
+              <textarea
+                className="input min-h-[140px]"
+                value={sealDraft}
+                onChange={(e) => setSealDraft(e.target.value)}
+              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" className="btn-primary w-full sm:w-auto" onClick={saveSeal}>
+                  <Save size={18} />
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => {
+                    setSealDraft(site?.sealing_specs ?? '')
+                    setEditSeal(false)
+                  }}
+                >
+                  <X size={18} />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={handlePickUpload}
+                  disabled={uploading}
+                >
+                  <FileUp size={18} />
+                  Upload doc/photo
+                </button>
+              </div>
+              <div className="helper-text">
+                Uploads are saved to the <span className="font-semibold">site-documents</span> bucket and recorded in <span className="font-semibold">site_files</span>.
+              </div>
+            </div>
           )}
         </div>
 
         <div className="card p-4 sm:p-6">
-          <div className="text-lg font-semibold text-slate-950">Site Info</div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm font-medium text-slate-700">Manager</div>
-              <div className="text-slate-950 font-semibold mt-1">
-                {site?.site_manager_name || '—'}
-              </div>
-              <div className="text-sm text-slate-600 mt-1">
-                {site?.site_manager_phone || '—'}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm font-medium text-slate-700">Access Notes</div>
-              <div className="text-slate-600 mt-1 whitespace-pre-line">
-                {site?.access_notes || '—'}
-              </div>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-semibold text-slate-950">Site Info</div>
+            {isAdmin && !editInfo && (
+              <div onClick={() => setEditInfo(true)}>{subtleEditBtn}</div>
+            )}
           </div>
-          <div className="mt-4">
-            <div className="text-sm font-medium text-slate-700">Description</div>
-            <div className="text-slate-600 mt-1 whitespace-pre-line">
-              {site?.location_description || '—'}
+
+          {!editInfo ? (
+            <>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm font-medium text-slate-700">Manager</div>
+                  <div className="text-slate-950 font-semibold mt-1">
+                    {site?.site_manager_name || '—'}
+                  </div>
+                  <div className="text-sm text-slate-600 mt-1">
+                    {site?.site_manager_phone || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-700">Access Notes</div>
+                  <div className="text-slate-600 mt-1 whitespace-pre-line">
+                    {site?.access_notes || '—'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="text-sm font-medium text-slate-700">Description</div>
+                <div className="text-slate-600 mt-1 whitespace-pre-line">
+                  {site?.location_description || '—'}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Manager name</label>
+                  <input
+                    className="input"
+                    value={infoDraft.site_manager_name}
+                    onChange={(e) => setInfoDraft((p) => ({ ...p, site_manager_name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Manager phone</label>
+                  <input
+                    className="input"
+                    value={infoDraft.site_manager_phone}
+                    onChange={(e) => setInfoDraft((p) => ({ ...p, site_manager_phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Access notes</label>
+                <textarea
+                  className="input min-h-[110px]"
+                  value={infoDraft.access_notes}
+                  onChange={(e) => setInfoDraft((p) => ({ ...p, access_notes: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Site description</label>
+                <textarea
+                  className="input min-h-[110px]"
+                  value={infoDraft.location_description}
+                  onChange={(e) => setInfoDraft((p) => ({ ...p, location_description: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" className="btn-primary w-full sm:w-auto" onClick={saveInfo}>
+                  <Save size={18} />
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => {
+                    setInfoDraft({
+                      site_manager_name: site?.site_manager_name ?? '',
+                      site_manager_phone: site?.site_manager_phone ?? '',
+                      access_notes: site?.access_notes ?? '',
+                      location_description: site?.location_description ?? '',
+                    })
+                    setEditInfo(false)
+                  }}
+                >
+                  <X size={18} />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={handlePickUpload}
+                  disabled={uploading}
+                >
+                  <FileUp size={18} />
+                  Upload doc/photo
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Documents */}
@@ -304,7 +567,7 @@ export default function SiteDetail() {
             </div>
           ) : (
             <ul className="mt-3 space-y-2">
-              {uploadedUrls.map((u) => (
+              {uploadedUrls.map((u: string) => (
                 <li key={u} className="flex items-center justify-between gap-3 border border-slate-200 rounded-lg px-3 py-2">
                   <div className="min-w-0">
                     <div className="text-slate-900 font-semibold truncate">{u.split('/').pop()}</div>
@@ -322,8 +585,80 @@ export default function SiteDetail() {
 
         {/* Active tasks */}
         <div className="card p-4 sm:p-6">
-          <div className="text-lg font-semibold text-slate-950">Active Tasks</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-semibold text-slate-950">Active Tasks</div>
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn-secondary rounded-full px-5"
+                onClick={() => setAddingTask((v) => !v)}
+              >
+                <Plus size={18} />
+                Add Task
+              </button>
+            )}
+          </div>
           <div className="helper-text mt-2">Tasks linked to this site.</div>
+
+          {isAdmin && addingTask && (
+            <div className="mt-4 border border-slate-200 rounded-2xl p-4 bg-white shadow-sm space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Title</label>
+                  <input
+                    className="input"
+                    value={taskDraft.title}
+                    onChange={(e) => setTaskDraft((p) => ({ ...p, title: e.target.value }))}
+                    placeholder="Task title…"
+                  />
+                </div>
+                <div>
+                  <label className="label">Category</label>
+                  <select
+                    className="input"
+                    value={taskDraft.category}
+                    onChange={(e) => setTaskDraft((p) => ({ ...p, category: e.target.value }))}
+                  >
+                    <option value="Snagging">Snagging</option>
+                    <option value="Domestic">Domestic</option>
+                    <option value="Additional Works">Additional Works</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Due date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={taskDraft.due_date}
+                    onChange={(e) => setTaskDraft((p) => ({ ...p, due_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <textarea
+                  className="input min-h-[110px]"
+                  value={taskDraft.notes}
+                  onChange={(e) => setTaskDraft((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Optional notes…"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" className="btn-primary w-full sm:w-auto" onClick={createTask}>
+                  <Save size={18} />
+                  Create task
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => setAddingTask(false)}
+                >
+                  <X size={18} />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {tasks.length === 0 ? (
             <div className="text-slate-600 mt-3">No tasks found.</div>
