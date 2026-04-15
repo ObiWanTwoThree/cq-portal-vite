@@ -26,10 +26,11 @@ export default function Dashboard() {
         return;
       }
       setUserEmail(user.email || '');
-      // Fetch role from profiles table
+      // Fetch profile (role + optional full_name) from profiles table.
+      // Use select('*') so the UI doesn't break if columns differ between environments.
       const { data: profileData, error: dbError } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', user.id)
         .single();
       if (dbError || !profileData?.role) {
@@ -38,7 +39,8 @@ export default function Dashboard() {
         return;
       }
       setRole(profileData.role);
-      setUserName(user.email || 'User');
+      const fullName = (profileData as any)?.full_name as string | undefined;
+      setUserName(fullName?.trim() || user.email || 'User');
       setLoading(false);
     };
     fetchUserAndRole();

@@ -52,7 +52,7 @@ const TaskDetails = () => {
   const generatePDF = () => {
     const doc = new jsPDF();
     doc.text(task?.title || 'Task', 10, 20);
-    doc.text(task?.site || '', 10, 30);
+    doc.text(task?.location || task?.site || '', 10, 30);
     doc.save(`${task?.title || 'task'}.pdf`);
   };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -23,7 +23,6 @@ const navLinks = [
 
 export default function MainLayout({ userName = 'User', children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Responsive: show sidebar on desktop, bottom nav on mobile
   return (

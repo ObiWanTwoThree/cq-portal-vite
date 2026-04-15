@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 
@@ -10,7 +10,7 @@ const AdminDashboard = () => {
   const [userRole, setUserRole] = useState('operative');
 
   useEffect(() => {
-    let timeoutId;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const fetchTasks = async () => {
       setLoading(true);
       setError('');
@@ -28,11 +28,11 @@ const AdminDashboard = () => {
         } else {
           setTasks(data || []);
         }
-      } catch (err) {
-        setError(err.message || 'An unknown error occurred.');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         setTasks([]);
       } finally {
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
         setLoading(false);
       }
     };
@@ -49,7 +49,9 @@ const AdminDashboard = () => {
     };
     fetchTasks();
     fetchUserRole();
-    return () => clearTimeout(timeoutId);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   return (
