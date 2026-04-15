@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 
 // `npm run ...` does NOT automatically load `.env.local`.
 // Load it explicitly so non-dev usage is copy/paste friendly.
@@ -47,6 +48,8 @@ Examples:
   npx tsx scripts/supabase-admin.ts list-profiles
   npx tsx scripts/supabase-admin.ts set-role --email someone@company.com --role admin
   npx tsx scripts/supabase-admin.ts set-name --email someone@company.com --name "Jane Doe"
+  npx tsx scripts/supabase-admin.ts create-operative --email op1@example.com --name "Op One"
+  npx tsx scripts/supabase-admin.ts create-operative --email op2@example.com --name "Op Two" --password "TempPass123!"
 
 Commands:
   health
@@ -54,6 +57,7 @@ Commands:
   list-profiles
   set-role --email <email> --role <admin|operative>
   set-name --email <email> --name <full name>
+  create-operative --email <email> --name <full name> [--password <password>]
 `.trim())
   process.exit(1)
 }
@@ -156,6 +160,47 @@ async function main() {
     if (upsertErr) throw upsertErr
 
     console.log(`Updated name for ${email} -> ${fullName}`)
+    return
+  }
+
+  if (cmd === 'create-operative') {
+    const email = parseFlag(process.argv, '--email')
+    const name = parseFlag(process.argv, '--name')
+    const passwordFlag = parseFlag(process.argv, '--password')
+    if (!email || !name) usage()
+
+    const fullName = name.trim()
+    if (!fullName) throw new Error('Name cannot be empty.')
+
+    // Generate a temp password if not provided.
+    const tempPassword =
+      passwordFlag?.trim() ||
+      `CQ-${crypto.randomBytes(6).toString('base64url')}-1!aA`
+
+    // Create auth user (confirmed so it can log in immediately).
+    const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: 'operative' },
+    })
+    if (createErr) throw createErr
+    const userId = created.user?.id
+    if (!userId) throw new Error('User created but missing id.')
+
+    // Ensure profile row exists with operative role + name.
+    const { error: upsertErr } = await supabase
+      .from('profiles')
+      .upsert({ id: userId, role: 'operative', full_name: fullName }, { onConflict: 'id' })
+    if (upsertErr) throw upsertErr
+
+    console.log(
+      JSON.stringify(
+        { email, password: tempPassword, id: userId, role: 'operative', full_name: fullName },
+        null,
+        2,
+      ),
+    )
     return
   }
 
