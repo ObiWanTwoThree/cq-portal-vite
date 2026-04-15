@@ -52,7 +52,6 @@ const RegisterPage: React.FC = () => {
         );
         if (profileErr) {
           // Ignore if the column isn't present yet; the password flow should still succeed.
-          // eslint-disable-next-line no-console
           console.warn('Unable to save full name to profiles:', profileErr.message);
         }
       }
@@ -68,8 +67,8 @@ const RegisterPage: React.FC = () => {
       }
 
       navigate('/dashboard');
-    } catch (err: any) {
-      setErrorMsg(err?.message ?? 'Something went wrong. Please try again.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     }
   };
 

@@ -18,6 +18,14 @@ type SignatureRow = {
   signed_at: string
 }
 
+type TaskSiteRow = {
+  location?: string | null
+  site?: string | null
+  status?: string | null
+  assigned_to?: string | null
+  created_at?: string | null
+}
+
 function uniqNonEmpty(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((v) => (v ?? '').trim()).filter(Boolean)))
 }
@@ -63,11 +71,10 @@ export default function SafetyDocuments() {
           .limit(500)
         if (tasksErr) throw tasksErr
 
-        const openTasks = (allTasks ?? []).filter((t: any) => String(t.status ?? '').toLowerCase() === 'open')
-        const pool = openTasks.length > 0
-          ? openTasks
-          : (allTasks ?? []).filter((t: any) => t.assigned_to === user.id)
-        const derivedSites = uniqNonEmpty(pool.map((t: any) => t.location || t.site))
+        const rows = (allTasks ?? []) as TaskSiteRow[]
+        const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
+        const pool = openTasks.length > 0 ? openTasks : rows.filter((t) => t.assigned_to === user.id)
+        const derivedSites = uniqNonEmpty(pool.map((t) => t.location || t.site))
 
         const siteFromUrl = (searchParams.get('site') ?? '').trim()
         const initial =
@@ -79,8 +86,8 @@ export default function SafetyDocuments() {
           setSites(derivedSites)
           setSelectedSite((prev) => prev || initial)
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Failed to load safety documents')
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load safety documents')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -118,8 +125,8 @@ export default function SafetyDocuments() {
           .order('created_at', { ascending: false })
         if (docsErr) throw docsErr
         if (!cancelled) setDocs((data ?? []) as SiteDocumentRow[])
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Failed to load documents')
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load documents')
       }
     }
 
@@ -145,7 +152,7 @@ export default function SafetyDocuments() {
           .eq('user_id', userId)
           .in('document_id', ids)
         if (sigErr) throw sigErr
-        const set = new Set((data ?? []).map((r: any) => String(r.document_id)))
+        const set = new Set((data ?? []).map((r: { document_id: string }) => String(r.document_id)))
         if (!cancelled) setSignedDocIds(set)
       } catch {
         // If table/policies are not set up yet, don't break the page.
@@ -170,11 +177,11 @@ export default function SafetyDocuments() {
         document_id: doc.id,
         signed_at: new Date().toISOString(),
       }
-      const { error: signErr } = await supabase.from('document_signatures').insert(row as any)
+      const { error: signErr } = await supabase.from('document_signatures').insert(row)
       if (signErr) throw signErr
       setSignedDocIds((prev) => new Set(prev).add(doc.id))
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to sign document')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to sign document')
     } finally {
       setSigningDocId(null)
     }

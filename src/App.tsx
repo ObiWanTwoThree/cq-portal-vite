@@ -18,7 +18,7 @@ function InviteRedirect() {
     if (hash.includes('type=invite') || hash.includes('type=recovery')) {
       navigate('/register' + window.location.search + hash, { replace: true });
     }
-  }, []);
+  }, [navigate]);
   return null;
 }
 

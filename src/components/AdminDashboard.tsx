@@ -5,6 +5,22 @@ import { supabase } from '../lib/supabaseClient';
 const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number] | 'Unknown';
 
+type TaskRow = {
+  id: string
+  title?: string | null
+  location?: string | null
+  category?: string | null
+  due_date?: string | null
+  status?: string | null
+  assigned_to?: string | null
+  created_at?: string | null
+}
+
+type ProfileRow = {
+  id: string
+  full_name?: string | null
+}
+
 function normalizeStatus(status: unknown): TaskStatus {
   if (typeof status !== 'string') return 'Unknown';
   return (STATUSES as readonly string[]).includes(status) ? (status as TaskStatus) : 'Unknown';
@@ -12,7 +28,7 @@ function normalizeStatus(status: unknown): TaskStatus {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [userRole, setUserRole] = useState('operative');
@@ -36,11 +52,11 @@ const AdminDashboard = () => {
           setError(error.message);
           setTasks([]);
         } else {
-          setTasks(data || []);
+          setTasks((data || []) as TaskRow[]);
 
           // Best-effort: hydrate assignee display names for the table (if profiles has full_name).
           const ids = Array.from(
-            new Set((data || []).map((t: any) => t.assigned_to).filter(Boolean)),
+            new Set(((data || []) as TaskRow[]).map((t) => t.assigned_to).filter(Boolean)),
           ) as string[];
           if (ids.length > 0) {
             const { data: profiles } = await supabase
@@ -48,9 +64,9 @@ const AdminDashboard = () => {
               .select('*')
               .in('id', ids);
             const map: Record<string, string> = {};
-            for (const p of profiles || []) {
-              const name = (p as any)?.full_name as string | undefined;
-              map[(p as any).id] = name?.trim() || (p as any).id;
+            for (const p of (profiles || []) as ProfileRow[]) {
+              const name = p.full_name;
+              map[p.id] = name?.trim() || p.id;
             }
             setAssigneeById(map);
           } else {

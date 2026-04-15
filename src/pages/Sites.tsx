@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
+type TaskSiteRow = {
+  location?: string | null
+  site?: string | null
+  status?: string | null
+}
+
 function uniqNonEmpty(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((v) => (v ?? '').trim()).filter(Boolean)))
 }
@@ -35,13 +41,14 @@ export default function Sites() {
           .limit(500)
         if (tasksErr) throw tasksErr
 
-        const openTasks = (data ?? []).filter((t: any) => String(t.status ?? '').toLowerCase() === 'open')
-        const pool = openTasks.length > 0 ? openTasks : (data ?? [])
-        const derived = uniqNonEmpty(pool.map((t: any) => t.location || t.site))
+        const rows = (data ?? []) as TaskSiteRow[]
+        const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
+        const pool = openTasks.length > 0 ? openTasks : rows
+        const derived = uniqNonEmpty(pool.map((t) => t.location || t.site))
 
         if (!cancelled) setSites(derived)
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Failed to load sites')
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load sites')
       } finally {
         if (!cancelled) setLoading(false)
       }
