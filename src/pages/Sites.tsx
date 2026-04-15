@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
+type SiteRow = {
+  id: string
+  name: string
+}
+
 type TaskSiteRow = {
   location?: string | null
-  site?: string | null
   status?: string | null
 }
 
@@ -18,6 +22,7 @@ export default function Sites() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [sites, setSites] = useState<string[]>([])
+  const [source, setSource] = useState<'sites_table' | 'tasks_fallback' | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -33,22 +38,41 @@ export default function Sites() {
           return
         }
 
-        // "Current sites" are derived from tasks. We bias toward Open jobs.
-        const { data, error: tasksErr } = await supabase
+        // Preferred: read from `sites` table (new infrastructure).
+        const { data: sitesRows, error: sitesErr } = await supabase
+          .from('sites')
+          .select('id,name')
+          .order('name', { ascending: true })
+
+        if (!sitesErr && (sitesRows ?? []).length > 0) {
+          const names = (sitesRows as SiteRow[]).map((s) => s.name).filter(Boolean)
+          if (!cancelled) {
+            setSites(names)
+            setSource('sites_table')
+          }
+          return
+        }
+
+        // Fallback: derive sites from tasks (older behavior), useful before SQL/RLS is applied.
+        const { data: taskRows, error: tasksErr } = await supabase
           .from('tasks')
-          .select('location,site,status')
+          .select('location,status')
           .order('created_at', { ascending: false })
           .limit(500)
         if (tasksErr) throw tasksErr
 
-        const rows = (data ?? []) as TaskSiteRow[]
+        const rows = (taskRows ?? []) as TaskSiteRow[]
         const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
         const pool = openTasks.length > 0 ? openTasks : rows
-        const derived = uniqNonEmpty(pool.map((t) => t.location || t.site))
+        const derived = uniqNonEmpty(pool.map((t) => t.location))
 
-        if (!cancelled) setSites(derived)
+        if (!cancelled) {
+          setSites(derived)
+          setSource('tasks_fallback')
+        }
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load sites')
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!cancelled) setError(msg || 'Failed to load sites')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -92,6 +116,11 @@ export default function Sites() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search sites…"
         />
+        {source === 'tasks_fallback' && (
+          <div className="helper-text mt-2">
+            Showing sites derived from tasks (run `supabase/sites.sql` to enable the sites table).
+          </div>
+        )}
 
         <div className="mt-4">
           {loading ? (

@@ -20,7 +20,6 @@ type SignatureRow = {
 
 type TaskSiteRow = {
   location?: string | null
-  site?: string | null
   status?: string | null
   assigned_to?: string | null
   created_at?: string | null
@@ -63,18 +62,30 @@ export default function SafetyDocuments() {
         }
         setUserId(user.id)
 
-        // Determine sites from tasks. Prefer Open tasks; fall back to recent assigned tasks.
-        const { data: allTasks, error: tasksErr } = await supabase
-          .from('tasks')
-          .select('location,site,status,assigned_to,created_at')
-          .order('created_at', { ascending: false })
-          .limit(500)
-        if (tasksErr) throw tasksErr
+        // Prefer `sites` table if available.
+        const { data: sitesRows, error: sitesErr } = await supabase
+          .from('sites')
+          .select('name')
+          .order('name', { ascending: true })
 
-        const rows = (allTasks ?? []) as TaskSiteRow[]
-        const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
-        const pool = openTasks.length > 0 ? openTasks : rows.filter((t) => t.assigned_to === user.id)
-        const derivedSites = uniqNonEmpty(pool.map((t) => t.location || t.site))
+        const derivedSites =
+          !sitesErr && (sitesRows ?? []).length > 0
+            ? uniqNonEmpty((sitesRows ?? []).map((s: { name?: string | null }) => s.name ?? null))
+            : await (async () => {
+                // Fallback: derive sites from tasks. Prefer Open tasks; fall back to recent assigned tasks.
+                const { data: allTasks, error: tasksErr } = await supabase
+                  .from('tasks')
+                  .select('location,status,assigned_to,created_at')
+                  .order('created_at', { ascending: false })
+                  .limit(500)
+                if (tasksErr) throw tasksErr
+
+                const rows = (allTasks ?? []) as TaskSiteRow[]
+                const openTasks = rows.filter((t) => String(t.status ?? '').toLowerCase() === 'open')
+                const pool =
+                  openTasks.length > 0 ? openTasks : rows.filter((t) => t.assigned_to === user.id)
+                return uniqNonEmpty(pool.map((t) => t.location))
+              })()
 
         const siteFromUrl = (searchParams.get('site') ?? '').trim()
         const initial =
@@ -87,7 +98,8 @@ export default function SafetyDocuments() {
           setSelectedSite((prev) => prev || initial)
         }
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load safety documents')
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!cancelled) setError(msg || 'Failed to load safety documents')
       } finally {
         if (!cancelled) setLoading(false)
       }
