@@ -138,13 +138,23 @@ export default function Sites() {
                     >
                       <span className="font-semibold text-slate-950 break-words">{s.name}</span>
                     </button>
-                    <button
-                      type="button"
-                      className="btn-secondary whitespace-nowrap"
-                      onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)}
-                    >
-                      View docs
-                    </button>
+                    {source === 'sites_table' ? (
+                      <button
+                        type="button"
+                        className="btn-secondary whitespace-nowrap"
+                        onClick={() => navigate(`/sites/${encodeURIComponent(s.id)}/documents`)}
+                      >
+                        View docs
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-secondary whitespace-nowrap"
+                        onClick={() => navigate(`/safety-documents?site=${encodeURIComponent(s.name)}`)}
+                      >
+                        View docs
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

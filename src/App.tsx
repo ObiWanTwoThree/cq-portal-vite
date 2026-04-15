@@ -11,6 +11,7 @@ import PwaIconPreviewer from './pages/PwaIconPreviewer';
 import SafetyDocuments from './pages/SafetyDocuments';
 import Sites from './pages/Sites';
 import SiteDetail from './pages/SiteDetail';
+import SiteDocuments from './pages/SiteDocuments';
 
 function InviteRedirect() {
   const navigate = useNavigate();
@@ -83,6 +84,14 @@ function App() {
           element={
             <MainLayout>
               <SiteDetail />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/sites/:id/documents"
+          element={
+            <MainLayout>
+              <SiteDocuments />
             </MainLayout>
           }
         />
