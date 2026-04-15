@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CloudSun, FileUp, MapPin, Phone, Droplets, ChevronLeft, Pencil, X, Save, Plus, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { getSiteDocumentsPublicUrl, SITE_DOCUMENTS_BUCKET } from '../lib/siteDocumentsStorage'
 
 type SiteRow = {
   id: string
@@ -180,7 +181,7 @@ export default function SiteDetail() {
     setError('')
     try {
       const path = `${site.id}/${Date.now()}-${file.name}`
-      const { error: upErr } = await supabase.storage.from('site-documents').upload(path, file, {
+      const { error: upErr } = await supabase.storage.from(SITE_DOCUMENTS_BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
       })
@@ -198,8 +199,7 @@ export default function SiteDetail() {
       const { error: insErr } = await supabase.from('site_files').insert(row)
       if (insErr) throw insErr
 
-      const { data: publicUrlData } = supabase.storage.from('site-documents').getPublicUrl(path)
-      const url = publicUrlData?.publicUrl
+      const url = getSiteDocumentsPublicUrl(path)
       if (url) setUploadedUrls((prev) => [url, ...prev])
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -216,15 +216,8 @@ export default function SiteDetail() {
     await handleUpload(f)
   }
 
-  const subtleEditBtn = (
-    <button
-      type="button"
-      className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-full px-4 py-2 hover:bg-slate-50 transition"
-    >
-      <Pencil size={16} />
-      Edit
-    </button>
-  )
+  const subtleEditBtnClass =
+    'inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-full px-4 py-2.5 hover:bg-slate-50 transition'
 
   const saveSeal = async () => {
     if (!site) return
@@ -308,7 +301,8 @@ export default function SiteDetail() {
             <ChevronLeft size={18} />
             Back
           </button>
-          <div className="text-3xl font-bold text-slate-950 tracking-tight mt-2 break-words">
+          <p className="text-xs font-bold tracking-widest text-slate-500 mt-3">SITE DETAILS</p>
+          <div className="text-3xl font-bold text-slate-950 tracking-tight mt-1 break-words">
             {loading ? 'Loading…' : site?.name ?? 'Site'}
           </div>
 
@@ -379,7 +373,10 @@ export default function SiteDetail() {
               <div className="text-lg font-semibold text-slate-950">What to Seal</div>
             </div>
             {isAdmin && !editSeal && (
-              <div onClick={() => setEditSeal(true)}>{subtleEditBtn}</div>
+              <button type="button" className={subtleEditBtnClass} onClick={() => setEditSeal(true)}>
+                <Pencil size={16} />
+                Edit
+              </button>
             )}
           </div>
 
@@ -407,13 +404,13 @@ export default function SiteDetail() {
                 onChange={(e) => setSealDraft(e.target.value)}
               />
               <div className="flex flex-col sm:flex-row gap-2">
-                <button type="button" className="btn-primary w-full sm:w-auto" onClick={saveSeal}>
+                <button type="button" className="btn-primary w-full py-3" onClick={saveSeal}>
                   <Save size={18} />
                   Save
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary w-full sm:w-auto"
+                  className="btn-secondary w-full py-3"
                   onClick={() => {
                     setSealDraft(site?.sealing_specs ?? '')
                     setEditSeal(false)
@@ -424,7 +421,7 @@ export default function SiteDetail() {
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary w-full sm:w-auto"
+                  className="btn-secondary w-full py-3"
                   onClick={handlePickUpload}
                   disabled={uploading}
                 >
@@ -443,7 +440,10 @@ export default function SiteDetail() {
           <div className="flex items-center justify-between gap-3">
             <div className="text-lg font-semibold text-slate-950">Site Info</div>
             {isAdmin && !editInfo && (
-              <div onClick={() => setEditInfo(true)}>{subtleEditBtn}</div>
+              <button type="button" className={subtleEditBtnClass} onClick={() => setEditInfo(true)}>
+                <Pencil size={16} />
+                Edit
+              </button>
             )}
           </div>
 
@@ -510,13 +510,13 @@ export default function SiteDetail() {
                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <button type="button" className="btn-primary w-full sm:w-auto" onClick={saveInfo}>
+                <button type="button" className="btn-primary w-full py-3" onClick={saveInfo}>
                   <Save size={18} />
                   Save
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary w-full sm:w-auto"
+                  className="btn-secondary w-full py-3"
                   onClick={() => {
                     setInfoDraft({
                       site_manager_name: site?.site_manager_name ?? '',
@@ -532,7 +532,7 @@ export default function SiteDetail() {
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary w-full sm:w-auto"
+                  className="btn-secondary w-full py-3"
                   onClick={handlePickUpload}
                   disabled={uploading}
                 >
@@ -554,7 +554,7 @@ export default function SiteDetail() {
               onClick={() => navigate(`/sites/${encodeURIComponent(site?.id ?? '')}/documents`)}
               disabled={!site?.id}
             >
-              View docs
+              View documents
             </button>
           </div>
           <div className="helper-text mt-2">
@@ -590,7 +590,7 @@ export default function SiteDetail() {
             {isAdmin && (
               <button
                 type="button"
-                className="btn-secondary rounded-full px-5"
+                className="btn-secondary rounded-full px-5 py-2.5"
                 onClick={() => setAddingTask((v) => !v)}
               >
                 <Plus size={18} />
@@ -644,13 +644,13 @@ export default function SiteDetail() {
                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <button type="button" className="btn-primary w-full sm:w-auto" onClick={createTask}>
+                <button type="button" className="btn-primary w-full py-3" onClick={createTask}>
                   <Save size={18} />
                   Create task
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary w-full sm:w-auto"
+                  className="btn-secondary w-full py-3"
                   onClick={() => setAddingTask(false)}
                 >
                   <X size={18} />

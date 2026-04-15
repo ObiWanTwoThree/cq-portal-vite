@@ -5,7 +5,7 @@ import {
   Settings,
   LogOut,
   Bell,
-  FileText
+  Building2
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
@@ -27,10 +27,15 @@ interface MainLayoutProps {
 
 const navLinks = [
   { label: 'Dashboard', icon: <LayoutDashboard size={22} />, path: '/dashboard' },
-  { label: 'Sites', icon: <FileText size={22} />, path: '/sites' },
+  { label: 'Sites', icon: <Building2 size={22} />, path: '/sites' },
   { label: 'Users', icon: <Users size={22} />, path: '/users' },
   { label: 'Settings', icon: <Settings size={22} />, path: '/settings' },
 ];
+
+function isNavActive(path: string, pathname: string) {
+  if (path === '/sites') return pathname === '/sites' || pathname.startsWith('/sites/')
+  return pathname === path
+}
 
 export default function MainLayout({ userName = 'User', children }: MainLayoutProps) {
   const navigate = useNavigate();
@@ -126,16 +131,22 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
           <span className="font-bold text-xl tracking-tight">CQ Portal</span>
         </div>
         <nav className="flex-1 px-2 mt-8 space-y-2">
-          {navLinks.map(link => (
+          {navLinks.map(link => {
+            const isActive = isNavActive(link.path, location.pathname)
+            return (
             <button
               key={link.label}
-              className="flex items-center w-full px-4 py-3 rounded-lg hover:bg-slate-800 transition text-left gap-3"
+              type="button"
+              className={`flex items-center w-full px-4 py-3 rounded-lg transition text-left gap-3 ${
+                isActive ? 'bg-slate-800 text-purple-200' : 'hover:bg-slate-800'
+              }`}
               onClick={() => navigate(link.path)}
             >
               {link.icon}
-              <span>{link.label}</span>
+              <span className={isActive ? 'font-semibold' : ''}>{link.label}</span>
             </button>
-          ))}
+            )
+          })}
         </nav>
         <button
           className="flex items-center gap-3 px-4 py-3 m-4 rounded-lg hover:bg-slate-800 transition"
@@ -150,7 +161,7 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       <nav className="fixed md:hidden bottom-0 left-0 right-0 z-40 bg-slate-900 flex justify-around items-center h-16 text-white border-t border-slate-800">
         {navLinks.slice(0, 4).map(link => (
           (() => {
-            const isActive = location.pathname === link.path;
+            const isActive = isNavActive(link.path, location.pathname);
             return (
           <button
             key={link.label}
