@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const setPasswordSchema = z
   .object({
+    fullName: z.string().min(2, 'Please enter your name'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
   })
@@ -29,7 +30,7 @@ const RegisterPage: React.FC = () => {
     formState: { errors, isSubmitting },
   } = useForm<SetPasswordValues>({
     resolver: zodResolver(setPasswordSchema),
-    defaultValues: { password: '', confirmPassword: '' },
+    defaultValues: { fullName: '', password: '', confirmPassword: '' },
   });
 
   const onSubmit = async (values: SetPasswordValues) => {
@@ -42,6 +43,19 @@ const RegisterPage: React.FC = () => {
       if (updateError) throw updateError;
 
       setUser(data?.user ?? null);
+
+      // Best-effort: store the user's display name on their profile (if the column exists).
+      if (data?.user?.id) {
+        const { error: profileErr } = await supabase.from('profiles').upsert(
+          { id: data.user.id, full_name: values.fullName.trim() },
+          { onConflict: 'id' },
+        );
+        if (profileErr) {
+          // Ignore if the column isn't present yet; the password flow should still succeed.
+          // eslint-disable-next-line no-console
+          console.warn('Unable to save full name to profiles:', profileErr.message);
+        }
+      }
 
       // Mark invite as accepted in the invites table
       const email = data?.user?.email;
@@ -75,6 +89,14 @@ const RegisterPage: React.FC = () => {
             {errorMsg}
           </p>
         )}
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Your name</label>
+          <input type="text" {...register('fullName')} className="input" />
+          {errors.fullName && (
+            <p className="text-red-500 text-sm mt-1">{errors.fullName.message}</p>
+          )}
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>

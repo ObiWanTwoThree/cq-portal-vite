@@ -1,29 +1,61 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
-  Briefcase,
   Users,
   Settings,
   LogOut,
   Bell
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabaseClient';
 
 interface MainLayoutProps {
+  /**
+   * Optional override. If omitted, we fetch `profiles.full_name` (fallback: email).
+   */
   userName?: string;
   children: React.ReactNode;
 }
 
 const navLinks = [
   { label: 'Dashboard', icon: <LayoutDashboard size={22} />, path: '/dashboard' },
-  { label: 'Jobs', icon: <Briefcase size={22} />, path: '/dashboard' },
   { label: 'Users', icon: <Users size={22} />, path: '/users' },
   { label: 'Settings', icon: <Settings size={22} />, path: '/settings' },
 ];
 
 export default function MainLayout({ userName = 'User', children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(userName);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // If caller provides a real name, use it as-is.
+    if (userName && userName !== 'User') {
+      setDisplayName(userName);
+      return;
+    }
+
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      const fullName = (profile as any)?.full_name as string | undefined;
+      const next = fullName?.trim() || user.email || 'User';
+      if (!cancelled) setDisplayName(next);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userName]);
 
   // Responsive: show sidebar on desktop, bottom nav on mobile
   return (
@@ -77,7 +109,7 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       <div className="flex-1 w-full min-w-0 min-h-screen md:ml-64 pb-16 md:pb-0 overflow-x-hidden">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-5 bg-white/80 backdrop-blur-md border-b border-white/20 shadow-xl">
-          <div className="text-lg font-semibold text-slate-800">Welcome, {userName}!</div>
+          <div className="text-lg font-semibold text-slate-800">Welcome, {displayName}!</div>
           <button className="relative p-2 rounded-full hover:bg-slate-100 transition">
             <Bell size={22} />
             <span className="absolute top-1 right-1 w-2 h-2 bg-fuchsia-500 rounded-full animate-pulse" />

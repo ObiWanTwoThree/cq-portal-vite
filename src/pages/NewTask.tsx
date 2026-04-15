@@ -73,7 +73,16 @@ export default function NewTask() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md p-8">
+      <div className="max-w-2xl mx-auto">
+        <button
+          type="button"
+          className="mb-6 border border-slate-300 text-slate-600 font-semibold py-2 px-6 rounded-lg hover:bg-slate-100 transition"
+          onClick={() => navigate('/dashboard')}
+          disabled={loading}
+        >
+          ← Back to Dashboard
+        </button>
+        <div className="bg-white rounded-xl shadow-md p-8">
         <h2 className="text-3xl font-bold text-slate-800 mb-8">Create New Task</h2>
         {error && <div className="mb-4 text-red-600 font-medium">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -175,6 +184,7 @@ export default function NewTask() {
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

@@ -6,6 +6,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import jsPDF from 'jspdf';
 
+const STATUSES = ['Open', 'In Progress', 'Completed', 'Archived'] as const;
+type TaskStatus = (typeof STATUSES)[number];
+type UserRole = 'admin' | 'operative' | null;
+
+type OperativeOption = {
+  id: string;
+  label: string;
+};
+
 const TaskDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -16,6 +25,13 @@ const TaskDetails = () => {
   const [newComment, setNewComment] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [operatives, setOperatives] = useState<OperativeOption[]>([]);
+  const [assignedOperativeLabel, setAssignedOperativeLabel] = useState<string>('');
+  const [assigning, setAssigning] = useState(false);
+  const [selectedOperativeId, setSelectedOperativeId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch task
@@ -23,36 +39,169 @@ const TaskDetails = () => {
     if (!id) return;
     setLoading(true);
     setError('');
-    Promise.all([
-      supabase.from('tasks').select('*').eq('id', id).single(),
-      supabase.from('task_comments').select('*').eq('task_id', id).order('created_at', { ascending: true })
-    ])
-      .then(([taskRes, commentsRes]) => {
-        if (taskRes.error) setError(taskRes.error.message);
-        else setTask(taskRes.data);
+    const load = async () => {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const user = authData?.user ?? null;
+        setCurrentUserId(user?.id ?? null);
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          setUserRole((profile as any)?.role ?? null);
+        } else {
+          setUserRole(null);
+        }
+
+        const [taskRes, commentsRes] = await Promise.all([
+          supabase.from('tasks').select('*').eq('id', id).single(),
+          supabase.from('task_comments').select('*').eq('task_id', id).order('created_at', { ascending: true }),
+        ]);
+
+        if (taskRes.error) {
+          setError(taskRes.error.message);
+          setTask(null);
+          setComments([]);
+          return;
+        }
+
+        setTask(taskRes.data);
         setComments(commentsRes.data || []);
-      })
-      .catch(err => setError(err?.message || 'Failed to load'))
-      .finally(() => setLoading(false));
+
+        // Load assigned operative label (name/email fallback) if assigned.
+        const assignedTo = (taskRes.data as any)?.assigned_to as string | null | undefined;
+        if (assignedTo) {
+          const { data: assignedProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', assignedTo)
+            .single();
+          const assignedName = (assignedProfile as any)?.full_name as string | undefined;
+          setAssignedOperativeLabel(assignedName?.trim() || assignedTo);
+        } else {
+          setAssignedOperativeLabel('');
+        }
+
+        // Load operative list for admin assignment dropdown.
+        const { data: ops } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'operative')
+          .order('full_name', { ascending: true });
+
+        const options: OperativeOption[] = (ops || []).map((p: any) => {
+          const name = (p.full_name as string | undefined)?.trim();
+          return { id: p.id, label: name || p.id };
+        });
+        setOperatives(options);
+        setSelectedOperativeId(assignedTo || '');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, [id]);
+
+  const updateStatus = async (nextStatus: TaskStatus) => {
+    if (!id) return;
+    setUpdatingStatus(true);
+    try {
+      const { error: updateErr } = await supabase
+        .from('tasks')
+        .update({ status: nextStatus })
+        .eq('id', id);
+      if (updateErr) throw updateErr;
+      const { data: newTask, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (fetchErr) throw fetchErr;
+      setTask(newTask);
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to update status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   // Admin unassign handler
   const handleUnassign = async () => {
     if (!id) return;
     if (!window.confirm('Are you sure you want to unassign this operative?')) return;
-    await supabase.from('tasks').update({ assigned_to: null }).eq('id', id);
-    // Refresh task state
-    setLoading(true);
-    const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
-    setTask(newTask);
-    setLoading(false);
+    setAssigning(true);
+    try {
+      const { error: updateErr } = await supabase.from('tasks').update({ assigned_to: null }).eq('id', id);
+      if (updateErr) throw updateErr;
+      const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
+      setTask(newTask);
+      setAssignedOperativeLabel('');
+      setSelectedOperativeId('');
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to unassign');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleAssignOperative = async () => {
+    if (!id || !selectedOperativeId) return;
+    setAssigning(true);
+    try {
+      const { error: updateErr } = await supabase
+        .from('tasks')
+        .update({ assigned_to: selectedOperativeId })
+        .eq('id', id);
+      if (updateErr) throw updateErr;
+
+      const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
+      setTask(newTask);
+
+      const chosen = operatives.find((o) => o.id === selectedOperativeId);
+      setAssignedOperativeLabel(chosen?.label || selectedOperativeId);
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to assign');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleAssignToMe = async () => {
+    if (!id) return;
+    setAssigning(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      if (!user?.id) throw new Error('Not logged in');
+
+      const { error: updateErr } = await supabase
+        .from('tasks')
+        .update({ assigned_to: user.id, status: 'In Progress' })
+        .eq('id', id)
+        .is('assigned_to', null);
+      if (updateErr) throw updateErr;
+
+      const { data: newTask } = await supabase.from('tasks').select('*').eq('id', id).single();
+      setTask(newTask);
+      setSelectedOperativeId(user.id);
+      setAssignedOperativeLabel('You');
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to assign job');
+    } finally {
+      setAssigning(false);
+    }
   };
 
   // PDF
   const generatePDF = () => {
     const doc = new jsPDF();
     doc.text(task?.title || 'Task', 10, 20);
-    doc.text(task?.site || '', 10, 30);
+    doc.text(task?.location || task?.site || '', 10, 30);
     doc.save(`${task?.title || 'task'}.pdf`);
   };
 
@@ -139,20 +288,58 @@ const TaskDetails = () => {
                   </div>
                   <div>
                     <div className="font-bold text-slate-700">Status</div>
-                    <div className="text-slate-800">{task.status || '-'}</div>
+                    <select
+                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 font-medium disabled:opacity-60"
+                      value={task.status || 'Open'}
+                      onChange={(e) => updateStatus(e.target.value as TaskStatus)}
+                      disabled={updatingStatus}
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
-                {/* Assignment section for admin */}
-                {task.assigned_to && (
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="font-bold text-slate-700">Assigned Operative:</div>
-                    <div className="text-slate-800">{task.assigned_to}</div>
-                    <button
-                      className="ml-4 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold transition-all duration-200"
-                      onClick={handleUnassign}
-                    >
-                      Unassign
-                    </button>
+                {/* Assignment section (admin) */}
+                {userRole === 'admin' && (
+                  <div className="mb-6">
+                    <div className="font-bold text-slate-700 mb-2">Assigned Operative</div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <select
+                        className="w-full sm:flex-1 border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 font-medium disabled:opacity-60"
+                        value={selectedOperativeId}
+                        onChange={(e) => setSelectedOperativeId(e.target.value)}
+                        disabled={assigning}
+                      >
+                        <option value="">Unassigned</option>
+                        {operatives.map((o) => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-2 px-4 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+                          onClick={handleAssignOperative}
+                          disabled={assigning || !selectedOperativeId}
+                        >
+                          {assigning ? 'Saving…' : 'Assign'}
+                        </button>
+                        <button
+                          type="button"
+                          className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold transition-all duration-200 disabled:opacity-60"
+                          onClick={handleUnassign}
+                          disabled={assigning || !task.assigned_to}
+                        >
+                          Unassign
+                        </button>
+                      </div>
+                    </div>
+                    {task.assigned_to && (
+                      <div className="text-slate-600 mt-2 text-sm">
+                        Currently assigned to: <span className="font-semibold text-slate-800">{assignedOperativeLabel || task.assigned_to}</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <h3 className="font-bold text-slate-700">Notes</h3>
@@ -164,6 +351,17 @@ const TaskDetails = () => {
                   Download PDF
                 </button>
               </div>
+
+              {userRole === 'operative' && !task.assigned_to && (
+                <button
+                  type="button"
+                  className="w-full mt-4 bg-gradient-to-r from-purple-800 to-fuchsia-600 text-white font-bold py-3 rounded-lg hover:opacity-90 shadow-md disabled:opacity-60"
+                  onClick={handleAssignToMe}
+                  disabled={assigning || !currentUserId}
+                >
+                  {assigning ? 'Assigning…' : 'Assign to Me'}
+                </button>
+              )}
               <div className="mt-12">
                 <div className="text-xl font-bold text-slate-800 mb-4">Job Updates & Chat</div>
                 <div className="bg-slate-50 rounded-lg p-4 mb-4 min-h-[120px] max-h-72 overflow-y-auto border border-slate-100">
