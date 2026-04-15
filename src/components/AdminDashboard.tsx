@@ -105,16 +105,13 @@ const AdminDashboard = () => {
   });
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="page-title">Dashboard</h2>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+    <div className="max-w-6xl mx-auto mt-6 sm:mt-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <div className="text-sm font-medium text-slate-700">Status</div>
             <select
-              className="input w-auto px-3 py-2.5"
+              className="input w-auto px-3 py-2.5 text-sm font-medium text-slate-700"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as TaskStatus)}
             >
@@ -124,17 +121,18 @@ const AdminDashboard = () => {
               <option value="Unknown">Unknown</option>
             </select>
           </div>
-          {userRole === 'admin' && (
-            <button
-              className="btn-primary w-full sm:w-auto"
-              onClick={() => navigate('/dashboard/new-task')}
-            >
-              Create New Task
-            </button>
-          )}
         </div>
+        {userRole === 'admin' && (
+          <button
+            className="btn-primary w-full sm:w-auto"
+            onClick={() => navigate('/dashboard/new-task')}
+          >
+            Create New Task
+          </button>
+        )}
       </div>
-      <div className="card overflow-x-auto">
+
+      <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
         {error && (
           <div className="p-6 text-red-700 text-sm bg-red-50 border-b border-red-200">Database Error: {error}</div>
         )}
@@ -151,15 +149,15 @@ const AdminDashboard = () => {
           <div className="p-6 text-slate-500">No tasks found for this status.</div>
         )}
         {!error && !loading && filteredTasks.length > 0 && (
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="w-full table-auto divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Due Date</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned</th>
+                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Title</th>
+                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Location</th>
+                <th className="hidden sm:table-cell px-6 py-3 text-left text-sm font-medium text-slate-700">Category</th>
+                <th className="hidden sm:table-cell px-6 py-3 text-left text-sm font-medium text-slate-700">Due Date</th>
+                <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Status</th>
+                <th className="hidden sm:table-cell px-6 py-3 text-left text-sm font-medium text-slate-700">Assigned</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
@@ -169,11 +167,11 @@ const AdminDashboard = () => {
                   className="cursor-pointer hover:bg-slate-50 transition-colors"
                   onClick={() => navigate('/task/' + task.id)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-800 font-medium">{task.title}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-500">{task.location}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-500">{task.category}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-500">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 sm:px-6 py-4 text-slate-950 font-semibold break-words">{task.title}</td>
+                  <td className="px-4 sm:px-6 py-4 text-slate-800 font-medium break-words">{task.location}</td>
+                  <td className="hidden sm:table-cell px-6 py-4 text-slate-600">{task.category}</td>
+                  <td className="hidden sm:table-cell px-6 py-4 text-slate-600">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</td>
+                  <td className="px-4 sm:px-6 py-4">
                     {normalizeStatus(task.status) === 'Open' ? (
                       <span className="badge-status-open">Open</span>
                     ) : normalizeStatus(task.status) === 'Completed' ? (
@@ -182,7 +180,7 @@ const AdminDashboard = () => {
                       <span className="badge-status-unknown">{task.status ?? 'Unknown'}</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-500">
+                  <td className="hidden sm:table-cell px-6 py-4 text-slate-600">
                     {task.assigned_to ? (assigneeById[task.assigned_to] || task.assigned_to) : '-'}
                   </td>
                 </tr>

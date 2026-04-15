@@ -7,9 +7,10 @@ import {
   Bell,
   FileText
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import type { NotificationRow } from '../lib/notifications';
+import { getFirstName } from '../lib/name';
 
 type ProfileRow = {
   id: string
@@ -33,20 +34,21 @@ const navLinks = [
 
 export default function MainLayout({ userName = 'User', children }: MainLayoutProps) {
   const navigate = useNavigate();
-  // Only used when we need to fetch the name from profiles.
-  const [displayName, setDisplayName] = useState<string>('User');
+  const location = useLocation();
+  // Fetching profile name is optional (kept for future use).
+  const [firstName, setFirstName] = useState<string>('User');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
-  const effectiveName = userName && userName !== 'User' ? userName : displayName;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   useEffect(() => {
     let cancelled = false;
-
-    // If caller provides a real name, avoid fetching.
-    if (userName && userName !== 'User') return;
 
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -61,8 +63,8 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
 
       const p = (profile ?? null) as ProfileRow | null;
       const fullName = typeof p?.full_name === 'string' ? p.full_name : '';
-      const next = fullName.trim() || user.email || 'User';
-      if (!cancelled) setDisplayName(next);
+      const next = getFirstName({ fullName, email: user.email ?? null });
+      if (!cancelled) setFirstName(next);
     };
 
     load();
@@ -147,16 +149,27 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       {/* Bottom nav (mobile) */}
       <nav className="fixed md:hidden bottom-0 left-0 right-0 z-40 bg-slate-900 flex justify-around items-center h-16 text-white border-t border-slate-800">
         {navLinks.slice(0, 4).map(link => (
+          (() => {
+            const isActive = location.pathname === link.path;
+            return (
           <button
             key={link.label}
-            className="flex flex-col items-center justify-center px-2 py-1 hover:text-purple-300 transition"
+            className={`flex flex-col items-center justify-center px-2 py-1 transition ${
+              isActive ? 'text-purple-300' : 'text-white/80 hover:text-white'
+            }`}
             onClick={() => navigate(link.path)}
           >
             {link.icon}
-            <span className="text-xs mt-1">{link.label}</span>
+            <span className={`text-xs mt-1 ${isActive ? 'font-semibold' : 'font-medium'}`}>{link.label}</span>
           </button>
+            );
+          })()
         ))}
-        <button onClick={() => navigate('/login')} className="flex flex-col items-center justify-center px-2 py-1 hover:text-purple-300 transition">
+        <button
+          onClick={() => navigate('/login')}
+          className="flex flex-col items-center justify-center px-2 py-1 text-white/80 hover:text-white transition"
+          type="button"
+        >
           <LogOut size={22} />
           <span className="text-xs mt-1">Log Out</span>
         </button>
@@ -165,20 +178,36 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       {/* Main content area */}
       <div className="flex-1 w-full min-w-0 min-h-screen md:ml-64 pb-16 md:pb-0 overflow-x-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-4 bg-white border-b border-slate-200">
-          <div className="text-base font-semibold text-slate-900">Welcome, {effectiveName}!</div>
-          <button
-            className="relative p-2 rounded-full hover:bg-slate-100 transition"
-            onClick={() => setNotifOpen((v) => !v)}
-            type="button"
-          >
-            <Bell size={22} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-purple-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
+        <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-8 py-3 bg-white border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <img src="/cq-logo.png" alt="CQ Logo" className="h-7 w-7 object-contain" />
+            <div className="flex flex-col leading-tight">
+              <div className="text-sm font-semibold text-slate-900">CQ Services Portal</div>
+              <div className="text-sm font-semibold text-slate-900">Welcome, {userName && userName !== 'User' ? getFirstName({ fullName: userName, email: null }) : firstName}!</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="relative p-2 rounded-full hover:bg-slate-100 transition"
+              onClick={() => setNotifOpen((v) => !v)}
+              type="button"
+              aria-label="Notifications"
+            >
+              <Bell size={22} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-purple-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="border border-purple-600 text-purple-700 rounded-full px-4 py-2 hover:bg-purple-50 font-semibold whitespace-nowrap"
+              onClick={handleLogout}
+            >
+              Log Out
+            </button>
+          </div>
           {notifOpen && (
             <div className="absolute right-4 sm:right-8 top-[64px] w-[320px] max-w-[90vw] card overflow-hidden z-50">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -222,7 +251,7 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
         </header>
         <main className="px-4 py-6 sm:p-6 w-full min-w-0 box-border">
           <div className="max-w-5xl mx-auto w-full min-w-0">
-            <div className="card p-4 sm:p-8 w-full min-w-0">
+            <div className="bg-white rounded-2xl shadow-md border-0 p-6 sm:p-8 w-full min-w-0">
               {children}
             </div>
           </div>
