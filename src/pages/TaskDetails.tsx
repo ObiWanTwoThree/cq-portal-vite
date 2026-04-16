@@ -739,12 +739,9 @@ const TaskDetails = () => {
                         />
                       ) : null}
 
-                      {!editTask &&
-                      (task.domestic_full_address || task.location || task.site || task.postcode)?.trim() ? (
+                      {!editTask && (task.location || task.site)?.trim() ? (
                         <a
-                          href={mapsHrefAddress(
-                            (task.domestic_full_address || task.location || task.site || task.postcode || '').toString(),
-                          )}
+                          href={mapsHrefAddress((task.location || task.site || '').toString())}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-3 inline-flex items-center gap-2 rounded-full border border-purple-200 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-purple-50 min-h-[40px]"
