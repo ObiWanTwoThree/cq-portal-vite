@@ -61,6 +61,7 @@ Commands:
   set-role --email <email> --role <admin|operative>
   set-name --email <email> --name <full name>
   create-operative --email <email> --name <full name> [--password <password>]
+  invite-operative --email <email> --name <full name>
   check-profile --email <email>
   backfill-profiles
   reset-password --email <email> --password <new password>
@@ -207,6 +208,33 @@ async function main() {
         2,
       ),
     )
+    return
+  }
+
+  if (cmd === 'invite-operative') {
+    const email = parseFlag(process.argv, '--email')
+    const name = parseFlag(process.argv, '--name')
+    if (!email || !name) usage()
+
+    const fullName = name.trim()
+    if (!fullName) throw new Error('Name cannot be empty.')
+
+    // Invite user via Supabase Auth (sends email using your project email templates).
+    const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { full_name: fullName, role: 'operative' },
+    })
+    if (inviteErr) throw inviteErr
+
+    const userId = invited.user?.id
+    if (!userId) throw new Error('Invite created but missing user id.')
+
+    // Ensure profile row exists with operative role + name.
+    const { error: upsertErr } = await supabase
+      .from('profiles')
+      .upsert({ id: userId, role: 'operative', full_name: fullName }, { onConflict: 'id' })
+    if (upsertErr) throw upsertErr
+
+    console.log(JSON.stringify({ email, id: userId, role: 'operative', full_name: fullName, invited: true }, null, 2))
     return
   }
 
