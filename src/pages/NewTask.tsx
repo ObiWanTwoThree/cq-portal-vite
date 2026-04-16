@@ -110,8 +110,13 @@ export default function NewTask() {
                 disabled={loading}
               >
                 <option value="Snagging">Snagging</option>
+                <option value="Remedials">Remedials</option>
                 <option value="Domestic">Domestic</option>
+                <option value="Commercial">Commercial</option>
                 <option value="Additional Works">Additional Works</option>
+                <option value="Warranty / Defects">Warranty / Defects</option>
+                <option value="Inspection">Inspection</option>
+                <option value="Emergency / Callout">Emergency / Callout</option>
               </select>
             </div>
             <div>
