@@ -76,6 +76,7 @@ export default function SiteDetail() {
     site_manager_phone: '',
     access_notes: '',
     location_description: '',
+    postcode: '',
   })
 
   const [addingTask, setAddingTask] = useState(false)
@@ -139,6 +140,7 @@ export default function SiteDetail() {
           site_manager_phone: s.site_manager_phone ?? '',
           access_notes: s.access_notes ?? '',
           location_description: s.location_description ?? '',
+          postcode: s.postcode ?? '',
         })
 
         // Active tasks for this site. Prefer site_id; fallback to location match (older data).
@@ -242,6 +244,7 @@ export default function SiteDetail() {
         site_manager_phone: infoDraft.site_manager_phone || null,
         access_notes: infoDraft.access_notes || null,
         location_description: infoDraft.location_description || null,
+        postcode: infoDraft.postcode || null,
       }
       const { error: upErr } = await supabase.from('sites').update(payload).eq('id', site.id)
       if (upErr) throw upErr
@@ -467,6 +470,12 @@ export default function SiteDetail() {
                 </div>
               </div>
               <div className="mt-4">
+                <div className="text-sm font-medium text-slate-700">Postcode</div>
+                <div className="text-slate-950 font-semibold mt-1">
+                  {site?.postcode || '—'}
+                </div>
+              </div>
+              <div className="mt-4">
                 <div className="text-sm font-medium text-slate-700">Description</div>
                 <div className="text-slate-600 mt-1 whitespace-pre-line">
                   {site?.location_description || '—'}
@@ -492,6 +501,14 @@ export default function SiteDetail() {
                     onChange={(e) => setInfoDraft((p) => ({ ...p, site_manager_phone: e.target.value }))}
                   />
                 </div>
+              </div>
+              <div>
+                <label className="label">Postcode</label>
+                <input
+                  className="input"
+                  value={infoDraft.postcode}
+                  onChange={(e) => setInfoDraft((p) => ({ ...p, postcode: e.target.value }))}
+                />
               </div>
               <div>
                 <label className="label">Access notes</label>
@@ -523,6 +540,7 @@ export default function SiteDetail() {
                       site_manager_phone: site?.site_manager_phone ?? '',
                       access_notes: site?.access_notes ?? '',
                       location_description: site?.location_description ?? '',
+                      postcode: site?.postcode ?? '',
                     })
                     setEditInfo(false)
                   }}
@@ -620,8 +638,13 @@ export default function SiteDetail() {
                     onChange={(e) => setTaskDraft((p) => ({ ...p, category: e.target.value }))}
                   >
                     <option value="Snagging">Snagging</option>
+                    <option value="Remedials">Remedials</option>
                     <option value="Domestic">Domestic</option>
+                    <option value="Commercial">Commercial</option>
                     <option value="Additional Works">Additional Works</option>
+                    <option value="Warranty / Defects">Warranty / Defects</option>
+                    <option value="Inspection">Inspection</option>
+                    <option value="Emergency / Callout">Emergency / Callout</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">

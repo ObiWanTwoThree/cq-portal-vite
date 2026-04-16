@@ -6,7 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { notifyUsers } from '../lib/notifications';
 import jsPDF from 'jspdf';
-import { Camera, ChevronLeft, Navigation, Plus, Trash2 } from 'lucide-react';
+import { Camera, ChevronLeft, MapPin, Navigation, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 
 const STATUSES = ['Open', 'In Progress', 'Completed', 'Closed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
@@ -72,6 +72,14 @@ const TaskDetails = () => {
   const [progress, setProgress] = useState<number>(0);
   const [savingProgress, setSavingProgress] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [editTask, setEditTask] = useState(false);
+  const [savingTaskEdits, setSavingTaskEdits] = useState(false);
+  const [taskEditDraft, setTaskEditDraft] = useState({
+    title: '',
+    location: '',
+    category: 'Snagging',
+    due_date: '',
+  });
 
   // Fetch task
   useEffect(() => {
@@ -215,6 +223,57 @@ const TaskDetails = () => {
     // Requirement: replace spaces with plus signs.
     const query = encodeURIComponent(postcodeValue.trim()).replace(/%20/g, '+')
     return `https://www.google.com/maps/search/?api=1&query=${query}`
+  }
+
+  const mapsHrefAddress = (addressValue: string) => {
+    const query = encodeURIComponent(addressValue.trim()).replace(/%20/g, '+')
+    return `https://www.google.com/maps/search/?api=1&query=${query}`
+  }
+
+  const startEditTask = () => {
+    if (userRole !== 'admin' || !task) return
+    setTaskEditDraft({
+      title: (task.title ?? '').toString(),
+      location: (task.location ?? task.site ?? '').toString(),
+      category: (task.category ?? 'Snagging').toString(),
+      due_date: (task.due_date ?? '').toString().slice(0, 10),
+    })
+    setEditTask(true)
+  }
+
+  const cancelEditTask = () => {
+    setEditTask(false)
+  }
+
+  const saveTaskEdits = async () => {
+    if (!id) return
+    if (userRole !== 'admin') return
+    const title = taskEditDraft.title.trim()
+    if (!title) {
+      setError('Title is required.')
+      return
+    }
+
+    setSavingTaskEdits(true)
+    setError('')
+    try {
+      const payload = {
+        title,
+        location: taskEditDraft.location.trim() || null,
+        category: taskEditDraft.category || null,
+        due_date: taskEditDraft.due_date || null,
+      }
+      const { error: upErr } = await supabase.from('tasks').update(payload).eq('id', id)
+      if (upErr) throw upErr
+
+      setTask((prev) => (prev ? { ...prev, ...payload } : prev))
+      setEditTask(false)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to save task')
+    } finally {
+      setSavingTaskEdits(false)
+    }
   }
 
   const statusBadgeClass = (statusRaw: unknown) => {
@@ -574,23 +633,85 @@ const TaskDetails = () => {
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 break-words">{task.title}</h2>
+                      {!editTask ? (
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 break-words">{task.title}</h2>
+                      ) : (
+                        <input
+                          className="input min-h-[44px] text-slate-950 font-semibold text-lg sm:text-xl w-full sm:w-[420px]"
+                          value={taskEditDraft.title}
+                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, title: e.target.value }))}
+                          disabled={savingTaskEdits}
+                          aria-label="Task title"
+                        />
+                      )}
                       <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${statusBadgeClass(task.status)}`}>
                         {task.status || 'Open'}
                       </span>
+                      {userRole === 'admin' && !editTask && (
+                        <button
+                          type="button"
+                          className="btn-secondary rounded-full px-3 py-2.5 min-h-[44px] inline-flex items-center gap-2"
+                          onClick={startEditTask}
+                          title="Edit task"
+                        >
+                          <Pencil size={16} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="hidden sm:flex">
-                    <button type="button" onClick={generatePDF} className="btn-secondary min-h-[44px]">
-                      Download PDF
-                    </button>
+                    {editTask ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary min-h-[44px] inline-flex items-center gap-2"
+                          onClick={saveTaskEdits}
+                          disabled={savingTaskEdits}
+                        >
+                          <Save size={18} />
+                          {savingTaskEdits ? 'Saving…' : 'Save'}
+                        </button>
+                        <button type="button" className="btn-secondary min-h-[44px] inline-flex items-center gap-2" onClick={cancelEditTask} disabled={savingTaskEdits}>
+                          <X size={18} />
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={generatePDF} className="btn-secondary min-h-[44px]">
+                        Download PDF
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <div className="text-xs font-bold tracking-widest text-slate-500">LOCATION</div>
-                      <div className="mt-1 text-slate-950 font-semibold break-words">{task.location || task.site || '—'}</div>
+                      {!editTask ? (
+                        <div className="mt-1 text-slate-950 font-semibold break-words">{task.location || task.site || '—'}</div>
+                      ) : (
+                        <input
+                          className="input mt-2 min-h-[44px]"
+                          value={taskEditDraft.location}
+                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, location: e.target.value }))}
+                          disabled={savingTaskEdits}
+                          placeholder="Address / location"
+                        />
+                      )}
+
+                      {(task.location || task.site) ? (
+                        <a
+                          href={mapsHrefAddress(task.location || task.site || '')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-2 text-purple-700 hover:text-purple-800 font-semibold"
+                          title="Get directions"
+                        >
+                          <MapPin size={16} />
+                          Get Directions
+                        </a>
+                      ) : null}
                       {task.postcode?.trim() ? (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <a
@@ -622,14 +743,42 @@ const TaskDetails = () => {
 
                     <div>
                       <div className="text-xs font-bold tracking-widest text-slate-500">CATEGORY</div>
-                      <div className="mt-1 text-slate-950 font-semibold">{task.category || '—'}</div>
+                      {!editTask ? (
+                        <div className="mt-1 text-slate-950 font-semibold">{task.category || '—'}</div>
+                      ) : (
+                        <select
+                          className="input mt-2 min-h-[44px]"
+                          value={taskEditDraft.category}
+                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, category: e.target.value }))}
+                          disabled={savingTaskEdits}
+                        >
+                          <option value="Snagging">Snagging</option>
+                          <option value="Remedials">Remedials</option>
+                          <option value="Domestic">Domestic</option>
+                          <option value="Commercial">Commercial</option>
+                          <option value="Additional Works">Additional Works</option>
+                          <option value="Warranty / Defects">Warranty / Defects</option>
+                          <option value="Inspection">Inspection</option>
+                          <option value="Emergency / Callout">Emergency / Callout</option>
+                        </select>
+                      )}
                     </div>
 
                     <div>
                       <div className="text-xs font-bold tracking-widest text-slate-500">DUE DATE</div>
-                      <div className="mt-1 text-slate-950 font-semibold">
-                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
-                      </div>
+                      {!editTask ? (
+                        <div className="mt-1 text-slate-950 font-semibold">
+                          {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
+                        </div>
+                      ) : (
+                        <input
+                          type="date"
+                          className="input mt-2 min-h-[44px]"
+                          value={taskEditDraft.due_date}
+                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, due_date: e.target.value }))}
+                          disabled={savingTaskEdits}
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -757,6 +906,14 @@ const TaskDetails = () => {
                 )}
                 <div className="mt-6">
                   <h3 className="section-title">Notes</h3>
+                  {String(task.category ?? '').toLowerCase().trim() === 'domestic' && (
+                    <div className="mt-3 bg-sky-50 border border-sky-200 text-sky-900 rounded-2xl p-4 shadow-sm">
+                      <div className="font-semibold">Customer appointment required</div>
+                      <div className="text-sm text-sky-900/90 mt-1">
+                        Please contact the customer in advance to confirm availability and ensure access can be provided.
+                      </div>
+                    </div>
+                  )}
                   <p className="text-slate-600 bg-slate-50 border border-slate-200 p-4 rounded-lg mt-2">
                     {task.notes || <span className="italic text-slate-400">No notes provided.</span>}
                   </p>
@@ -884,6 +1041,23 @@ const TaskDetails = () => {
                   <div className="mt-10 border-t border-slate-200 pt-6">
                     <div className="text-sm font-semibold text-slate-950">Danger Zone</div>
                     <div className="text-sm text-slate-600 mt-1">Delete is only available for Open jobs.</div>
+                  {editTask ? (
+                    <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary min-h-[44px] inline-flex items-center gap-2"
+                        onClick={saveTaskEdits}
+                        disabled={savingTaskEdits}
+                      >
+                        <Save size={18} />
+                        {savingTaskEdits ? 'Saving…' : 'Save changes'}
+                      </button>
+                      <button type="button" className="btn-secondary min-h-[44px] inline-flex items-center gap-2" onClick={cancelEditTask} disabled={savingTaskEdits}>
+                        <X size={18} />
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
                     <button
                       type="button"
                       className="mt-3 inline-flex items-center gap-2 text-red-700 hover:text-red-800 font-semibold min-h-[44px]"
