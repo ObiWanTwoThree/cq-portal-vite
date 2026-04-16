@@ -6,6 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { notifyUsers } from '../lib/notifications';
 import jsPDF from 'jspdf';
+import { Navigation } from 'lucide-react';
 
 const STATUSES = ['Open', 'Completed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
@@ -23,6 +24,7 @@ type TaskRow = {
   category?: string | null
   location?: string | null
   site?: string | null
+  postcode?: string | null
   due_date?: string | null
   status?: string | null
   notes?: string | null
@@ -175,6 +177,12 @@ const TaskDetails = () => {
       setUpdatingStatus(false);
     }
   };
+
+  const mapsHref = (postcodeValue: string) => {
+    // Requirement: replace spaces with plus signs.
+    const query = encodeURIComponent(postcodeValue.trim()).replace(/%20/g, '+')
+    return `https://www.google.com/maps/search/?api=1&query=${query}`
+  }
 
   const deleteOpenJob = async () => {
     if (!id) return
@@ -453,6 +461,33 @@ const TaskDetails = () => {
                   <div>
                     <div className="label mb-0">Site/Location</div>
                     <div className="text-slate-800">{task.location || task.site || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="label mb-0">Postcode</div>
+                    {task.postcode?.trim() ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <a
+                          href={mapsHref(task.postcode)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-purple-700 hover:text-purple-800 font-semibold underline underline-offset-4"
+                        >
+                          {task.postcode}
+                        </a>
+                        <a
+                          href={mapsHref(task.postcode)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-secondary rounded-full px-4 py-2.5 min-h-[44px] inline-flex items-center gap-2"
+                          title="Open in Google Maps"
+                        >
+                          <Navigation size={18} />
+                          Get Directions
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500">—</div>
+                    )}
                   </div>
                   <div>
                     <div className="label mb-0">Category</div>

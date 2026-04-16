@@ -12,6 +12,7 @@ export default function NewTask() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Snagging');
   const [location, setLocation] = useState('');
+  const [postcode, setPostcode] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
@@ -56,6 +57,7 @@ export default function NewTask() {
         title,
         category,
         location,
+        postcode: postcode.trim() || null,
         notes,
         due_date: dueDate,
         image_urls,
@@ -122,6 +124,18 @@ export default function NewTask() {
                 required
                 disabled={loading}
               />
+            </div>
+            <div>
+              <label className="label">Postcode</label>
+              <input
+                type="text"
+                className="input"
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value)}
+                placeholder="e.g. G40 3RE"
+                disabled={loading}
+              />
+              <div className="helper-text mt-1">Used for Google Maps directions.</div>
             </div>
             <div className="flex flex-col md:flex-row md:space-x-4">
               <div className="flex-1 mb-2 md:mb-0">
