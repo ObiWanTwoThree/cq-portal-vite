@@ -1,14 +1,14 @@
 
 
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { notifyUsers } from '../lib/notifications';
 import jsPDF from 'jspdf';
-import { Navigation } from 'lucide-react';
+import { Camera, ChevronLeft, Navigation, Plus, Trash2 } from 'lucide-react';
 
-const STATUSES = ['Open', 'Completed'] as const;
+const STATUSES = ['Open', 'In Progress', 'Completed', 'Closed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
 type UserRole = 'admin' | 'operative' | null;
 
@@ -16,6 +16,7 @@ type ProfileRow = {
   id: string
   role?: unknown
   full_name?: unknown
+  email?: unknown
 }
 
 type TaskRow = {
@@ -29,6 +30,8 @@ type TaskRow = {
   status?: string | null
   notes?: string | null
   assigned_to?: string | null
+  completion_percent?: number | null
+  photo_urls?: string[] | null
 }
 
 type CommentRow = {
@@ -65,6 +68,10 @@ const TaskDetails = () => {
   const [deleting, setDeleting] = useState(false);
   const [assigningAction, setAssigningAction] = useState<'assign_operative' | 'assign_me' | 'unassign' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
 
   // Fetch task
   useEffect(() => {
@@ -102,8 +109,14 @@ const TaskDetails = () => {
           return;
         }
 
-        setTask((taskRes.data ?? null) as TaskRow | null);
+        const nextTask = (taskRes.data ?? null) as TaskRow | null;
+        setTask(nextTask);
         setComments(((commentsRes.data || []) as CommentRow[]));
+        setProgress(
+          typeof nextTask?.completion_percent === 'number'
+            ? Math.max(0, Math.min(100, Math.round(nextTask.completion_percent)))
+            : 0,
+        );
 
         // Load assigned operative label (name/email fallback) if assigned.
         const assignedTo = ((taskRes.data ?? null) as TaskRow | null)?.assigned_to ?? null;
@@ -115,22 +128,42 @@ const TaskDetails = () => {
             .single();
           const ap = (assignedProfile ?? null) as ProfileRow | null;
           const assignedName = typeof ap?.full_name === 'string' ? ap.full_name : '';
-          setAssignedOperativeLabel(assignedName.trim() || assignedTo);
+          const assignedEmail = typeof ap?.email === 'string' ? ap.email : ''
+          setAssignedOperativeLabel(assignedName.trim() || assignedEmail.trim() || 'Operative');
         } else {
           setAssignedOperativeLabel('');
         }
 
         // Load operative list for admin assignment dropdown.
-        const { data: ops } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('role', 'operative')
-          .order('full_name', { ascending: true });
+        // Prefer name/email for display. Never show raw UUIDs to end users.
+        let ops: ProfileRow[] = []
+        {
+          const { data: ops1, error: opsErr1 } = await supabase
+            .from('profiles')
+            .select('id,role,full_name,email')
+            .ilike('role', 'operative')
+            .order('full_name', { ascending: true })
+          if (!opsErr1) {
+            ops = (ops1 ?? []) as ProfileRow[]
+          } else {
+            const { data: ops2 } = await supabase
+              .from('profiles')
+              .select('*')
+              .ilike('role', 'operative')
+              .order('full_name', { ascending: true })
+            ops = (ops2 ?? []) as ProfileRow[]
+          }
+        }
 
-        const options: OperativeOption[] = ((ops || []) as ProfileRow[]).map((p) => {
-          const name = typeof p.full_name === 'string' ? p.full_name.trim() : '';
-          return { id: p.id, label: name || p.id };
-        });
+        const options: OperativeOption[] = ops
+          .map((p) => {
+            const name = typeof p.full_name === 'string' ? p.full_name.trim() : ''
+            const email = typeof p.email === 'string' ? p.email.trim() : ''
+            const label = name || email
+            return { id: p.id, label }
+          })
+          .filter((o) => Boolean(o.label))
+
         setOperatives(options);
         setSelectedOperativeId(assignedTo || '');
       } catch (err: unknown) {
@@ -182,6 +215,97 @@ const TaskDetails = () => {
     // Requirement: replace spaces with plus signs.
     const query = encodeURIComponent(postcodeValue.trim()).replace(/%20/g, '+')
     return `https://www.google.com/maps/search/?api=1&query=${query}`
+  }
+
+  const statusBadgeClass = (statusRaw: unknown) => {
+    const s = typeof statusRaw === 'string' ? statusRaw.toLowerCase().trim() : ''
+    if (s === 'open') return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+    if (s === 'in progress' || s === 'in_progress') return 'bg-sky-50 text-sky-700 border border-sky-200'
+    if (s === 'completed' || s === 'closed') return 'bg-slate-100 text-slate-700 border border-slate-200'
+    return 'bg-slate-100 text-slate-700 border border-slate-200'
+  }
+
+  const assignedToLabel = useMemo(() => {
+    if (!task?.assigned_to) return 'Unassigned'
+    return assignedOperativeLabel?.trim() || 'Assigned'
+  }, [assignedOperativeLabel, task?.assigned_to])
+
+  const chatImageUrls = useMemo(() => {
+    return comments
+      .map((c) => (c.content ?? '').trim())
+      .filter(Boolean)
+      .filter((v) => {
+        if (!v.startsWith('http')) return false
+        if (v.includes('/storage/v1/object/public/task-files/')) return true
+        return /\.(jpeg|jpg|png|gif|webp)$/i.test(v)
+      })
+  }, [comments])
+
+  const galleryUrls = useMemo(() => {
+    const fromTask = Array.isArray(task?.photo_urls) ? task.photo_urls : []
+    const merged = [...fromTask, ...chatImageUrls]
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const u of merged) {
+      const k = (u ?? '').trim()
+      if (!k || seen.has(k)) continue
+      seen.add(k)
+      out.push(k)
+    }
+    return out
+  }, [chatImageUrls, task])
+
+  const saveProgress = async (nextValue: number) => {
+    if (!id) return
+    setSavingProgress(true)
+    setError('')
+    try {
+      const { error: upErr } = await supabase.from('tasks').update({ completion_percent: nextValue }).eq('id', id)
+      if (upErr) throw upErr
+      setTask((prev) => (prev ? { ...prev, completion_percent: nextValue } : prev))
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to save progress')
+    } finally {
+      setSavingProgress(false)
+    }
+  }
+
+  const uploadGalleryPhoto = async (file: File) => {
+    if (!id) return
+    setUploadingGallery(true)
+    setError('')
+    try {
+      const path = `${id}/${Date.now()}-${file.name}`
+      const { error: upErr } = await supabase.storage.from('task-files').upload(path, file, { upsert: false })
+      if (upErr) throw upErr
+      const { data: publicUrlData } = supabase.storage.from('task-files').getPublicUrl(path)
+      const url = publicUrlData.publicUrl
+
+      // Best-effort: persist in tasks.photo_urls (requires DB column). If missing, this will fail silently.
+      const next = [...(Array.isArray(task?.photo_urls) ? task!.photo_urls : []), url]
+      const { error: upTaskErr } = await supabase.from('tasks').update({ photo_urls: next }).eq('id', id)
+      if (!upTaskErr) setTask((prev) => (prev ? { ...prev, photo_urls: next } : prev))
+
+      // Also post into chat so everyone sees it in updates.
+      const { data: userData } = await supabase.auth.getUser()
+      const user = userData?.user
+      if (user?.id) {
+        await supabase.from('task_comments').insert([{ task_id: id, user_id: user.id, user_name: user.email, content: url }])
+        const { data: commentsData } = await supabase
+          .from('task_comments')
+          .select('*')
+          .eq('task_id', id)
+          .order('created_at', { ascending: true })
+        setComments(((commentsData || []) as CommentRow[]))
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Upload failed')
+    } finally {
+      setUploadingGallery(false)
+      if (galleryInputRef.current) galleryInputRef.current.value = ''
+    }
   }
 
   const deleteOpenJob = async () => {
@@ -405,9 +529,10 @@ const TaskDetails = () => {
     setUploading(true);
     try {
       const fileName = `${Date.now()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('task-files').upload(fileName, file);
+      const filePath = `${id}/${fileName}`;
+      const { error: uploadError } = await supabase.storage.from('task-files').upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: publicUrlData } = supabase.storage.from('task-files').getPublicUrl(fileName);
+      const { data: publicUrlData } = supabase.storage.from('task-files').getPublicUrl(filePath);
       const publicUrl = publicUrlData.publicUrl;
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
@@ -427,14 +552,16 @@ const TaskDetails = () => {
 
   return (
     <div className="page p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <button
-          className="btn-secondary mb-6"
+          type="button"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4"
           onClick={() => navigate('/dashboard')}
         >
-          ← Back to Dashboard
+          <ChevronLeft size={18} />
+          Back to Dashboard
         </button>
-        <div className="card card-pad">
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6 sm:p-8">
           {loading ? (
             <div className="text-slate-500 text-lg text-center">Loading task details...</div>
           ) : error ? (
@@ -445,85 +572,116 @@ const TaskDetails = () => {
             <>
               <div className="mb-8">
                 <div className="flex items-start justify-between gap-4 mb-4">
-                  <h2 className="page-title break-words">{task.title}</h2>
-                  {userRole === 'admin' && (task.status ?? 'Open') === 'Open' && (
-                    <button
-                      type="button"
-                      className="shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2.5 shadow-sm disabled:opacity-60 disabled:hover:bg-red-600"
-                      onClick={deleteOpenJob}
-                      disabled={deleting}
-                    >
-                      {deleting ? 'Deleting…' : 'Delete Task'}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 break-words">{task.title}</h2>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${statusBadgeClass(task.status)}`}>
+                        {task.status || 'Open'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex">
+                    <button type="button" onClick={generatePDF} className="btn-secondary min-h-[44px]">
+                      Download PDF
                     </button>
-                  )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <div className="label mb-0">Site/Location</div>
-                    <div className="text-slate-800">{task.location || task.site || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="label mb-0">Postcode</div>
-                    {task.postcode?.trim() ? (
-                      <div className="mt-1 flex items-center gap-2">
-                        <a
-                          href={mapsHref(task.postcode)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-purple-700 hover:text-purple-800 font-semibold underline underline-offset-4"
-                        >
-                          {task.postcode}
-                        </a>
-                        <a
-                          href={mapsHref(task.postcode)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-secondary rounded-full px-4 py-2.5 min-h-[44px] inline-flex items-center gap-2"
-                          title="Open in Google Maps"
-                        >
-                          <Navigation size={18} />
-                          Get Directions
-                        </a>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">LOCATION</div>
+                      <div className="mt-1 text-slate-950 font-semibold break-words">{task.location || task.site || '—'}</div>
+                      {task.postcode?.trim() ? (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <a
+                            href={mapsHref(task.postcode)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-purple-700 hover:text-purple-800 font-semibold underline underline-offset-4"
+                          >
+                            <Navigation size={16} />
+                            {task.postcode}
+                          </a>
+                          <a
+                            href={mapsHref(task.postcode)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-secondary rounded-full px-4 py-2.5 min-h-[44px] inline-flex items-center gap-2"
+                          >
+                            <Navigation size={18} />
+                            Get Directions
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">ASSIGNED TO</div>
+                      <div className="mt-1 text-slate-950 font-semibold">{assignedToLabel}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">CATEGORY</div>
+                      <div className="mt-1 text-slate-950 font-semibold">{task.category || '—'}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">DUE DATE</div>
+                      <div className="mt-1 text-slate-950 font-semibold">
+                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
                       </div>
-                    ) : (
-                      <div className="text-slate-500">—</div>
-                    )}
+                    </div>
                   </div>
-                  <div>
-                    <div className="label mb-0">Category</div>
-                    <div className="text-slate-800">{task.category || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="label mb-0">Due Date</div>
-                    <div className="text-slate-800">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</div>
-                  </div>
-                  <div>
-                    <div className="label mb-0">Status</div>
-                    <select
-                      className="input mt-1"
-                      value={task.status || 'Open'}
-                      onChange={(e) => updateStatus(e.target.value as TaskStatus)}
-                      disabled={updatingStatus}
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">STATUS</div>
+                      <select
+                        className="input mt-2 min-h-[44px]"
+                        value={task.status || 'Open'}
+                        onChange={(e) => updateStatus(e.target.value as TaskStatus)}
+                        disabled={updatingStatus}
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold tracking-widest text-slate-500">COMPLETION %</div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-950">{progress}%</div>
+                        <div className="text-xs text-slate-500">{savingProgress ? 'Saving…' : ''}</div>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={progress}
+                        onChange={(e) => setProgress(Number(e.target.value))}
+                        onMouseUp={() => saveProgress(progress)}
+                        onTouchEnd={() => saveProgress(progress)}
+                        className="mt-2 w-full"
+                        disabled={savingProgress}
+                      />
+                    </div>
                   </div>
                 </div>
                 {/* Assignment section (admin) */}
                 {userRole === 'admin' && (
-                  <div className="mb-6">
-                    <div className="label">Assignment</div>
+                  <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
+                    <div className="text-sm font-semibold text-slate-950">Assignment</div>
                     {operatives.length === 0 ? (
                       <div className="mt-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
                         No operatives found
                       </div>
                     ) : null}
 
-                    <div className="relative z-50 flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
+                    <div className="relative z-50 flex flex-col lg:flex-row lg:items-center gap-3 mt-4">
                       <select
-                        className="input w-full sm:flex-1 min-h-[44px]"
+                        className="input w-full lg:flex-1 min-h-[44px]"
                         value={selectedOperativeId}
                         onChange={(e) => setSelectedOperativeId(e.target.value)}
                         disabled={assigning}
@@ -533,7 +691,7 @@ const TaskDetails = () => {
                           <option key={o.id} value={o.id}>{o.label}</option>
                         ))}
                       </select>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
                         <button
                           type="button"
                           className="btn-primary w-full min-h-[44px] inline-flex items-center justify-center gap-2"
@@ -592,7 +750,7 @@ const TaskDetails = () => {
                     </div>
                     {task.assigned_to && (
                       <div className="text-slate-600 mt-2 text-sm">
-                        Currently assigned to: <span className="font-semibold text-slate-800">{assignedOperativeLabel || task.assigned_to}</span>
+                        Assigned to: <span className="font-semibold text-slate-800">{assignedToLabel}</span>
                       </div>
                     )}
                   </div>
@@ -621,64 +779,122 @@ const TaskDetails = () => {
                 </button>
               )}
               <div className="mt-12">
-                <div className="section-title mb-4">Job Updates</div>
-                <div className="bg-slate-50 rounded-lg p-4 mb-4 min-h-[120px] max-h-72 overflow-y-auto border border-slate-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-lg font-semibold text-slate-950">Job Photos</div>
+                  <button
+                    type="button"
+                    className="btn-secondary rounded-full px-4 py-2.5 min-h-[44px] inline-flex items-center gap-2"
+                    onClick={() => galleryInputRef.current?.click()}
+                    disabled={uploadingGallery}
+                  >
+                    <Plus size={18} />
+                    {uploadingGallery ? 'Uploading…' : 'Add photo'}
+                  </button>
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      uploadGalleryPhoto(f)
+                    }}
+                    disabled={uploadingGallery}
+                  />
+                </div>
+
+                {galleryUrls.length === 0 ? (
+                  <div className="mt-3 text-slate-500">No photos yet.</div>
+                ) : (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {galleryUrls.map((u) => (
+                      <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="block">
+                        <img src={u} alt="job" className="h-28 w-full object-cover rounded-2xl border border-slate-200 shadow-sm" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-8 text-lg font-semibold text-slate-950">Job Updates</div>
+                <div className="mt-3 bg-slate-50 border border-slate-200 rounded-2xl p-4 max-h-[420px] overflow-y-auto">
                   {comments.length === 0 ? (
-                    <div className="text-slate-400 text-center italic">No updates yet. Start the conversation below!</div>
+                    <div className="text-slate-400 text-center italic py-10">No updates yet.</div>
                   ) : (
-                    <ul className="space-y-4">
-                      {comments.map((c) => (
-                        <li key={c.id} className="">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="font-bold text-slate-700">{c.user_name}</span>
-                            <span className="text-xs text-slate-400">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</span>
-                          </div>
-                          <div className="text-slate-700 whitespace-pre-line ml-1">
-                            {c.content && (c.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) || c.content.startsWith('https://') && c.content.includes('/task-files/')) ? (
-                              <img src={c.content} alt="uploaded" className="max-h-48 rounded-lg border mt-2" />
-                            ) : (
-                              c.content
-                            )}
-                          </div>
-                        </li>
-                      ))}
+                    <ul className="space-y-3">
+                      {comments.map((c) => {
+                        const mine = Boolean(currentUserId && c.user_id === currentUserId)
+                        const content = (c.content ?? '').trim()
+                        const isImage =
+                          content.startsWith('http') &&
+                          (content.includes('/storage/v1/object/public/task-files/') || /\.(jpeg|jpg|png|gif|webp)$/i.test(content))
+                        return (
+                          <li key={c.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[85%] sm:max-w-[70%] ${mine ? 'text-right' : 'text-left'}`}>
+                              <div
+                                className={`inline-block rounded-2xl px-4 py-3 shadow-sm border ${
+                                  mine ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-900 border-slate-200'
+                                }`}
+                              >
+                                {isImage ? (
+                                  <a href={content} target="_blank" rel="noopener noreferrer">
+                                    <img src={content} alt="uploaded" className="max-h-56 rounded-xl border border-white/20" />
+                                  </a>
+                                ) : (
+                                  <div className="whitespace-pre-line text-sm leading-relaxed">{content}</div>
+                                )}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</div>
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </div>
-                <form onSubmit={handleSendMessage} className="flex items-end space-x-2">
-                  <input
-                    type="text"
-                    className="input flex-1"
-                    placeholder="Type a message..."
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    disabled={sending || uploading}
-                  />
-                  <button
-                    type="submit"
-                    className="btn-primary w-auto"
-                    disabled={sending || !newComment.trim() || uploading}
-                  >
-                    {sending ? 'Sending...' : 'Send Message'}
+
+                <form onSubmit={handleSendMessage} className="mt-3 flex items-end gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      className="input w-full pr-12 min-h-[44px]"
+                      placeholder="Message…"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      disabled={sending || uploading}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 p-2 rounded-lg"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      title="Quick photo update"
+                    >
+                      <Camera size={18} />
+                    </button>
+                  </div>
+                  <button type="submit" className="btn-primary min-h-[44px]" disabled={sending || !newComment.trim() || uploading}>
+                    {sending ? 'Sending…' : 'Send'}
                   </button>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    ref={fileInputRef}
-                    style={{ display: 'none' }}
-                    onChange={handleFileUpload}
-                    disabled={uploading}
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary w-auto px-3"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    title="Upload Photo"
-                  >
-                    {uploading ? <span className="animate-spin">+</span> : '+'}
-                  </button>
+                  <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} disabled={uploading} />
                 </form>
+
+                {userRole === 'admin' && (
+                  <div className="mt-10 border-t border-slate-200 pt-6">
+                    <div className="text-sm font-semibold text-slate-950">Danger Zone</div>
+                    <div className="text-sm text-slate-600 mt-1">Delete is only available for Open jobs.</div>
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-2 text-red-700 hover:text-red-800 font-semibold min-h-[44px]"
+                      onClick={deleteOpenJob}
+                      disabled={deleting || (task.status ?? 'Open') !== 'Open'}
+                    >
+                      <Trash2 size={18} />
+                      {deleting ? 'Deleting…' : 'Delete task'}
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
