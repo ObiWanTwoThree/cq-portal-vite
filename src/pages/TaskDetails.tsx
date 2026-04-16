@@ -80,7 +80,8 @@ const TaskDetails = () => {
             .eq('id', user.id)
             .single();
           const p = (profile ?? null) as ProfileRow | null;
-          const r = typeof p?.role === 'string' ? p.role : null;
+          const rRaw = typeof p?.role === 'string' ? p.role : '';
+          const r = rRaw.toLowerCase().trim();
           setUserRole((r === 'admin' || r === 'operative') ? (r as UserRole) : null);
         } else {
           setUserRole(null);
@@ -120,7 +121,7 @@ const TaskDetails = () => {
         const { data: ops } = await supabase
           .from('profiles')
           .select('*')
-          .eq('role', 'operative')
+          .ilike('role', 'operative')
           .order('full_name', { ascending: true });
 
         const options: OperativeOption[] = ((ops || []) as ProfileRow[]).map((p) => {
@@ -423,8 +424,13 @@ const TaskDetails = () => {
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <h2 className="page-title break-words">{task.title}</h2>
                   {userRole === 'admin' && (task.status ?? 'Open') === 'Open' && (
-                    <button type="button" className="btn-danger shrink-0" onClick={deleteOpenJob} disabled={deleting}>
-                      {deleting ? 'Deleting…' : 'Delete'}
+                    <button
+                      type="button"
+                      className="shrink-0 min-h-[44px] inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2.5 shadow-sm disabled:opacity-60 disabled:hover:bg-red-600"
+                      onClick={deleteOpenJob}
+                      disabled={deleting}
+                    >
+                      {deleting ? 'Deleting…' : 'Delete Task'}
                     </button>
                   )}
                 </div>
