@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 function getToday() {
@@ -12,7 +13,6 @@ export default function NewTask() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Snagging');
   const [location, setLocation] = useState('');
-  const [postcode, setPostcode] = useState('');
   const [domesticClientName, setDomesticClientName] = useState('');
   const [domesticContactNumber, setDomesticContactNumber] = useState('');
   const [domesticFullAddress, setDomesticFullAddress] = useState('');
@@ -59,8 +59,7 @@ export default function NewTask() {
       {
         title,
         category,
-        location,
-        postcode: postcode.trim() || null,
+        location: location.trim(),
         domestic_client_name: category === 'Domestic' ? domesticClientName.trim() || null : null,
         domestic_contact_number: category === 'Domestic' ? domesticContactNumber.trim() || null : null,
         domestic_full_address: category === 'Domestic' ? domesticFullAddress.trim() || null : null,
@@ -170,28 +169,20 @@ export default function NewTask() {
                 </div>
               </div>
             )}
-            <div>
-              <label className="label">Site / Location</label>
+            <div className="md:col-span-2">
+              <label className="label inline-flex items-center gap-2">
+                <MapPin size={16} className="text-purple-700" />
+                Address or Postcode
+              </label>
               <input
                 type="text"
                 className="input"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
+                placeholder="e.g. G40 3RE or 31 Maidenhill Grove"
                 required
                 disabled={loading}
               />
-            </div>
-            <div>
-              <label className="label">Postcode</label>
-              <input
-                type="text"
-                className="input"
-                value={postcode}
-                onChange={(e) => setPostcode(e.target.value)}
-                placeholder="e.g. G40 3RE"
-                disabled={loading}
-              />
-              <div className="helper-text mt-1">Used for Google Maps directions.</div>
             </div>
             <div className="flex flex-col md:flex-row md:space-x-4">
               <div className="flex-1 mb-2 md:mb-0">
