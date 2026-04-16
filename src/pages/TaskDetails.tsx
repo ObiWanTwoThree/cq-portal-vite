@@ -6,7 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { notifyUsers } from '../lib/notifications';
 import jsPDF from 'jspdf';
-import { Camera, ChevronLeft, MapPin, Navigation, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Camera, ChevronLeft, Navigation, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 
 const STATUSES = ['Open', 'In Progress', 'Completed', 'Closed'] as const;
 type TaskStatus = (typeof STATUSES)[number];
@@ -26,6 +26,9 @@ type TaskRow = {
   location?: string | null
   site?: string | null
   postcode?: string | null
+  domestic_client_name?: string | null
+  domestic_contact_number?: string | null
+  domestic_full_address?: string | null
   due_date?: string | null
   status?: string | null
   notes?: string | null
@@ -47,6 +50,21 @@ type OperativeOption = {
   id: string;
   label: string;
 };
+
+function toErrorMessage(err: unknown): string {
+  if (!err) return 'An unexpected error occurred'
+  if (err instanceof Error) return err.message || 'An unexpected error occurred'
+  if (typeof err === 'object') {
+    const maybe = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const message = typeof maybe.message === 'string' ? maybe.message : ''
+    const details = typeof maybe.details === 'string' ? maybe.details : ''
+    const hint = typeof maybe.hint === 'string' ? maybe.hint : ''
+    const code = typeof maybe.code === 'string' ? maybe.code : ''
+    const parts = [message, details, hint, code].map((s) => s.trim()).filter(Boolean)
+    if (parts.length) return parts.join(' — ')
+  }
+  return 'An unexpected error occurred'
+}
 
 const TaskDetails = () => {
   const { id } = useParams();
@@ -77,6 +95,10 @@ const TaskDetails = () => {
   const [taskEditDraft, setTaskEditDraft] = useState({
     title: '',
     location: '',
+    postcode: '',
+    domestic_client_name: '',
+    domestic_contact_number: '',
+    domestic_full_address: '',
     category: 'Snagging',
     due_date: '',
   });
@@ -219,12 +241,6 @@ const TaskDetails = () => {
     }
   };
 
-  const mapsHref = (postcodeValue: string) => {
-    // Requirement: replace spaces with plus signs.
-    const query = encodeURIComponent(postcodeValue.trim()).replace(/%20/g, '+')
-    return `https://www.google.com/maps/search/?api=1&query=${query}`
-  }
-
   const mapsHrefAddress = (addressValue: string) => {
     const query = encodeURIComponent(addressValue.trim()).replace(/%20/g, '+')
     return `https://www.google.com/maps/search/?api=1&query=${query}`
@@ -235,6 +251,10 @@ const TaskDetails = () => {
     setTaskEditDraft({
       title: (task.title ?? '').toString(),
       location: (task.location ?? task.site ?? '').toString(),
+      postcode: (task.postcode ?? '').toString(),
+      domestic_client_name: (task.domestic_client_name ?? '').toString(),
+      domestic_contact_number: (task.domestic_contact_number ?? '').toString(),
+      domestic_full_address: (task.domestic_full_address ?? '').toString(),
       category: (task.category ?? 'Snagging').toString(),
       due_date: (task.due_date ?? '').toString().slice(0, 10),
     })
@@ -260,17 +280,26 @@ const TaskDetails = () => {
       const payload = {
         title,
         location: taskEditDraft.location.trim() || null,
+        postcode: taskEditDraft.postcode.trim() || null,
+        domestic_client_name:
+          taskEditDraft.category === 'Domestic' ? taskEditDraft.domestic_client_name.trim() || null : null,
+        domestic_contact_number:
+          taskEditDraft.category === 'Domestic' ? taskEditDraft.domestic_contact_number.trim() || null : null,
+        domestic_full_address:
+          taskEditDraft.category === 'Domestic' ? taskEditDraft.domestic_full_address.trim() || null : null,
         category: taskEditDraft.category || null,
         due_date: taskEditDraft.due_date || null,
       }
       const { error: upErr } = await supabase.from('tasks').update(payload).eq('id', id)
       if (upErr) throw upErr
 
-      setTask((prev) => (prev ? { ...prev, ...payload } : prev))
+      // Refresh row so UI reflects DB truth.
+      const { data: fresh, error: freshErr } = await supabase.from('tasks').select('*').eq('id', id).single()
+      if (freshErr) throw freshErr
+      setTask((fresh ?? null) as TaskRow | null)
       setEditTask(false)
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg || 'Failed to save task')
+      setError(toErrorMessage(e))
     } finally {
       setSavingTaskEdits(false)
     }
@@ -700,39 +729,30 @@ const TaskDetails = () => {
                         />
                       )}
 
-                      {(task.location || task.site) ? (
+                      {editTask ? (
+                        <input
+                          className="input mt-2 min-h-[44px]"
+                          value={taskEditDraft.postcode}
+                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, postcode: e.target.value }))}
+                          disabled={savingTaskEdits}
+                          placeholder="Postcode"
+                        />
+                      ) : null}
+
+                      {!editTask &&
+                      (task.domestic_full_address || task.location || task.site || task.postcode)?.trim() ? (
                         <a
-                          href={mapsHrefAddress(task.location || task.site || '')}
+                          href={mapsHrefAddress(
+                            (task.domestic_full_address || task.location || task.site || task.postcode || '').toString(),
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-2 text-purple-700 hover:text-purple-800 font-semibold"
-                          title="Get directions"
+                          className="mt-3 inline-flex items-center gap-2 rounded-full border border-purple-200 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-purple-50 min-h-[40px]"
+                          title="Open in Google Maps"
                         >
-                          <MapPin size={16} />
+                          <Navigation size={16} className="text-purple-700" />
                           Get Directions
                         </a>
-                      ) : null}
-                      {task.postcode?.trim() ? (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <a
-                            href={mapsHref(task.postcode)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-purple-700 hover:text-purple-800 font-semibold underline underline-offset-4"
-                          >
-                            <Navigation size={16} />
-                            {task.postcode}
-                          </a>
-                          <a
-                            href={mapsHref(task.postcode)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-secondary rounded-full px-4 py-2.5 min-h-[44px] inline-flex items-center gap-2"
-                          >
-                            <Navigation size={18} />
-                            Get Directions
-                          </a>
-                        </div>
                       ) : null}
                     </div>
 
@@ -815,6 +835,103 @@ const TaskDetails = () => {
                         className="mt-2 w-full"
                         disabled={savingProgress}
                       />
+                    </div>
+                  </div>
+
+                  {/* Client info (view mode) */}
+                  {!editTask &&
+                    Boolean(
+                      (task.domestic_client_name ?? '').trim() ||
+                        (task.domestic_contact_number ?? '').trim() ||
+                        (task.domestic_full_address ?? '').trim(),
+                    ) && (
+                      <div className="mt-5 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                        <div className="text-sm font-semibold text-slate-950">Client Info</div>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-xs font-bold tracking-widest text-slate-500">CLIENT NAME</div>
+                            <div className="mt-1 text-slate-950 font-semibold">
+                              {task.domestic_client_name?.trim() || '—'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold tracking-widest text-slate-500">CONTACT NUMBER</div>
+                            {task.domestic_contact_number?.trim() ? (
+                              <a
+                                href={`tel:${task.domestic_contact_number.replace(/[^\d+]/g, '')}`}
+                                className="mt-1 inline-flex items-center text-purple-700 hover:text-purple-800 font-semibold"
+                              >
+                                {task.domestic_contact_number}
+                              </a>
+                            ) : (
+                              <div className="mt-1 text-slate-600">—</div>
+                            )}
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="text-xs font-bold tracking-widest text-slate-500">FULL ADDRESS</div>
+                            {task.domestic_full_address?.trim() ? (
+                              <a
+                                href={mapsHrefAddress(task.domestic_full_address)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-flex items-center gap-2 text-purple-700 hover:text-purple-800 font-semibold underline underline-offset-4"
+                              >
+                                <Navigation size={16} />
+                                {task.domestic_full_address}
+                              </a>
+                            ) : (
+                              <div className="mt-1 text-slate-600">—</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Domestic client fields (edit mode only) */}
+                  <div
+                    className={`mt-5 transition-all duration-200 ${
+                      editTask && taskEditDraft.category === 'Domestic'
+                        ? 'opacity-100 max-h-[500px]'
+                        : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'
+                    }`}
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                      <div className="text-sm font-semibold text-slate-950">Client Info (Domestic)</div>
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="label">Client Name</label>
+                          <input
+                            className="input min-h-[44px]"
+                            value={taskEditDraft.domestic_client_name}
+                            onChange={(e) => setTaskEditDraft((p) => ({ ...p, domestic_client_name: e.target.value }))}
+                            disabled={savingTaskEdits}
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Contact Number</label>
+                          <input
+                            className="input min-h-[44px]"
+                            type="tel"
+                            value={taskEditDraft.domestic_contact_number}
+                            onChange={(e) =>
+                              setTaskEditDraft((p) => ({ ...p, domestic_contact_number: e.target.value }))
+                            }
+                            disabled={savingTaskEdits}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="label">Full Address</label>
+                          <input
+                            className="input min-h-[44px]"
+                            value={taskEditDraft.domestic_full_address}
+                            onChange={(e) =>
+                              setTaskEditDraft((p) => ({ ...p, domestic_full_address: e.target.value }))
+                            }
+                            disabled={savingTaskEdits}
+                            placeholder="House number, street, town/city, postcode"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
