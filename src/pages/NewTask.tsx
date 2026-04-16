@@ -13,6 +13,9 @@ export default function NewTask() {
   const [category, setCategory] = useState('Snagging');
   const [location, setLocation] = useState('');
   const [postcode, setPostcode] = useState('');
+  const [domesticClientName, setDomesticClientName] = useState('');
+  const [domesticContactNumber, setDomesticContactNumber] = useState('');
+  const [domesticFullAddress, setDomesticFullAddress] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
@@ -58,6 +61,9 @@ export default function NewTask() {
         category,
         location,
         postcode: postcode.trim() || null,
+        domestic_client_name: category === 'Domestic' ? domesticClientName.trim() || null : null,
+        domestic_contact_number: category === 'Domestic' ? domesticContactNumber.trim() || null : null,
+        domestic_full_address: category === 'Domestic' ? domesticFullAddress.trim() || null : null,
         notes,
         due_date: dueDate,
         image_urls,
@@ -105,7 +111,15 @@ export default function NewTask() {
               <select
                 className="input"
                 value={category}
-                onChange={e => setCategory(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setCategory(next)
+                  if (next !== 'Domestic') {
+                    setDomesticClientName('')
+                    setDomesticContactNumber('')
+                    setDomesticFullAddress('')
+                  }
+                }}
                 required
                 disabled={loading}
               >
@@ -119,6 +133,43 @@ export default function NewTask() {
                 <option value="Emergency / Callout">Emergency / Callout</option>
               </select>
             </div>
+            {category === 'Domestic' && (
+              <div className="md:col-span-2 transition-all duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="label">Client Name</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={domesticClientName}
+                      onChange={(e) => setDomesticClientName(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Contact Number</label>
+                    <input
+                      type="tel"
+                      className="input"
+                      value={domesticContactNumber}
+                      onChange={(e) => setDomesticContactNumber(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label">Full Address</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={domesticFullAddress}
+                      onChange={(e) => setDomesticFullAddress(e.target.value)}
+                      disabled={loading}
+                      placeholder="House number, street, town/city, postcode"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <label className="label">Site / Location</label>
               <input
