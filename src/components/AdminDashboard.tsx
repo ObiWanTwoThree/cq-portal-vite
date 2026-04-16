@@ -19,6 +19,7 @@ type TaskRow = {
 type ProfileRow = {
   id: string
   full_name?: string | null
+  role?: unknown
 }
 
 function normalizeStatus(status: unknown): TaskStatus {
@@ -90,7 +91,9 @@ const AdminDashboard = () => {
           .select('role')
           .eq('id', user.id)
           .single();
-        setUserRole(profile?.role || 'operative');
+        const raw = (profile as ProfileRow | null)?.role
+        const role = typeof raw === 'string' ? raw.toLowerCase().trim() : ''
+        setUserRole(role === 'admin' ? 'admin' : 'operative');
       }
     };
     fetchTasks();
@@ -214,7 +217,7 @@ const AdminDashboard = () => {
                       {normalizeStatus(task.status) === 'Open' ? (
                         <button
                           type="button"
-                          className="btn-danger px-4 py-2.5"
+                          className="btn-danger px-4 py-2.5 min-h-[44px]"
                           disabled={deletingId === task.id}
                           onClick={(e) => {
                             e.stopPropagation()
