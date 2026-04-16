@@ -111,7 +111,15 @@ export default function NewTask() {
               <select
                 className="input"
                 value={category}
-                onChange={e => setCategory(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setCategory(next)
+                  if (next !== 'Domestic') {
+                    setDomesticClientName('')
+                    setDomesticContactNumber('')
+                    setDomesticFullAddress('')
+                  }
+                }}
                 required
                 disabled={loading}
               >
@@ -125,45 +133,43 @@ export default function NewTask() {
                 <option value="Emergency / Callout">Emergency / Callout</option>
               </select>
             </div>
-            <div
-              className={`md:col-span-2 transition-all duration-200 ${
-                category === 'Domestic' ? 'opacity-100 max-h-[500px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'
-              }`}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="label">Client Name</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={domesticClientName}
-                    onChange={(e) => setDomesticClientName(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div>
-                  <label className="label">Contact Number</label>
-                  <input
-                    type="tel"
-                    className="input"
-                    value={domesticContactNumber}
-                    onChange={(e) => setDomesticContactNumber(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="label">Full Address</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={domesticFullAddress}
-                    onChange={(e) => setDomesticFullAddress(e.target.value)}
-                    disabled={loading}
-                    placeholder="House number, street, town/city, postcode"
-                  />
+            {category === 'Domestic' && (
+              <div className="md:col-span-2 transition-all duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="label">Client Name</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={domesticClientName}
+                      onChange={(e) => setDomesticClientName(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Contact Number</label>
+                    <input
+                      type="tel"
+                      className="input"
+                      value={domesticContactNumber}
+                      onChange={(e) => setDomesticContactNumber(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label">Full Address</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={domesticFullAddress}
+                      onChange={(e) => setDomesticFullAddress(e.target.value)}
+                      disabled={loading}
+                      placeholder="House number, street, town/city, postcode"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <div>
               <label className="label">Site / Location</label>
               <input
