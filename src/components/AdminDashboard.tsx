@@ -34,6 +34,7 @@ const AdminDashboard = () => {
   const [userRole, setUserRole] = useState('operative');
   const [statusFilter, setStatusFilter] = useState<TaskStatus>('Open');
   const [assigneeById, setAssigneeById] = useState<Record<string, string>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -104,6 +105,28 @@ const AdminDashboard = () => {
     return normalizeStatus(t.status) === statusFilter;
   });
 
+  const deleteTask = async (task: TaskRow) => {
+    if (userRole !== 'admin') return
+    if (normalizeStatus(task.status) !== 'Open') return
+    if (!window.confirm('Delete this open job? This cannot be undone.')) return
+
+    setError('')
+    setDeletingId(task.id)
+    try {
+      // Best-effort: remove comments first (ignore failures).
+      await supabase.from('task_comments').delete().eq('task_id', task.id)
+
+      const { error: delErr } = await supabase.from('tasks').delete().eq('id', task.id)
+      if (delErr) throw delErr
+      setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to delete job')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto mt-6 sm:mt-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
@@ -158,6 +181,9 @@ const AdminDashboard = () => {
                 <th className="hidden sm:table-cell px-6 py-3 text-left text-sm font-medium text-slate-700">Due Date</th>
                 <th className="px-4 sm:px-6 py-3 text-left text-sm font-medium text-slate-700">Status</th>
                 <th className="hidden sm:table-cell px-6 py-3 text-left text-sm font-medium text-slate-700">Assigned</th>
+                {userRole === 'admin' && (
+                  <th className="px-4 sm:px-6 py-3 text-right text-sm font-medium text-slate-700">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
@@ -183,6 +209,25 @@ const AdminDashboard = () => {
                   <td className="hidden sm:table-cell px-6 py-4 text-slate-600">
                     {task.assigned_to ? (assigneeById[task.assigned_to] || task.assigned_to) : '-'}
                   </td>
+                  {userRole === 'admin' && (
+                    <td className="px-4 sm:px-6 py-4 text-right">
+                      {normalizeStatus(task.status) === 'Open' ? (
+                        <button
+                          type="button"
+                          className="btn-danger px-4 py-2.5"
+                          disabled={deletingId === task.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteTask(task)
+                          }}
+                        >
+                          {deletingId === task.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400 text-sm">—</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
