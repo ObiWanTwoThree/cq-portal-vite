@@ -60,6 +60,7 @@ const TaskDetails = () => {
   const [assignedOperativeLabel, setAssignedOperativeLabel] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
   const [selectedOperativeId, setSelectedOperativeId] = useState<string>('');
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch task
@@ -172,6 +173,32 @@ const TaskDetails = () => {
       setUpdatingStatus(false);
     }
   };
+
+  const deleteOpenJob = async () => {
+    if (!id) return
+    if (userRole !== 'admin') return
+    if ((task?.status ?? 'Open') !== 'Open') {
+      alert('Only Open jobs can be deleted.')
+      return
+    }
+    if (!window.confirm('Delete this open job? This cannot be undone.')) return
+
+    setDeleting(true)
+    setError('')
+    try {
+      // Best-effort: delete comments first (ignore failures).
+      await supabase.from('task_comments').delete().eq('task_id', id)
+
+      const { error: delErr } = await supabase.from('tasks').delete().eq('id', id)
+      if (delErr) throw delErr
+      navigate('/dashboard')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to delete job')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   // Admin unassign handler
   const handleUnassign = async () => {
@@ -393,7 +420,14 @@ const TaskDetails = () => {
           ) : (
             <>
               <div className="mb-8">
-                <h2 className="page-title mb-4">{task.title}</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h2 className="page-title break-words">{task.title}</h2>
+                  {userRole === 'admin' && (task.status ?? 'Open') === 'Open' && (
+                    <button type="button" className="btn-danger shrink-0" onClick={deleteOpenJob} disabled={deleting}>
+                      {deleting ? 'Deleting…' : 'Delete'}
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                   <div>
                     <div className="label mb-0">Site/Location</div>
