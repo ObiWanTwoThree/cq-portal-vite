@@ -61,6 +61,7 @@ const TaskDetails = () => {
   const [assigning, setAssigning] = useState(false);
   const [selectedOperativeId, setSelectedOperativeId] = useState<string>('');
   const [deleting, setDeleting] = useState(false);
+  const [assigningAction, setAssigningAction] = useState<'assign_operative' | 'assign_me' | 'unassign' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch task
@@ -205,6 +206,7 @@ const TaskDetails = () => {
   const handleUnassign = async () => {
     if (!id) return;
     if (!window.confirm('Are you sure you want to unassign this operative?')) return;
+    setAssigningAction('unassign');
     setAssigning(true);
     try {
       const { error: updateErr } = await supabase.from('tasks').update({ assigned_to: null }).eq('id', id);
@@ -217,11 +219,21 @@ const TaskDetails = () => {
       alert(e instanceof Error ? e.message : 'Failed to unassign');
     } finally {
       setAssigning(false);
+      setAssigningAction(null);
     }
   };
 
   const handleAssignOperative = async () => {
-    if (!id || !selectedOperativeId) return;
+    if (!id) return;
+    if (operatives.length === 0) {
+      alert('No operatives found')
+      return
+    }
+    if (!selectedOperativeId) {
+      alert('Please select an operative first.')
+      return
+    }
+    setAssigningAction('assign_operative');
     setAssigning(true);
     try {
       const { error: updateErr } = await supabase
@@ -249,6 +261,7 @@ const TaskDetails = () => {
       alert(e instanceof Error ? e.message : 'Failed to assign');
     } finally {
       setAssigning(false);
+      setAssigningAction(null);
     }
   };
 
@@ -258,6 +271,7 @@ const TaskDetails = () => {
       const ok = window.confirm('This job is currently assigned to someone else. Reassign to you?');
       if (!ok) return;
     }
+    setAssigningAction('assign_me');
     setAssigning(true);
     try {
       const { error: updateErr } = await supabase
@@ -283,6 +297,7 @@ const TaskDetails = () => {
       alert(e instanceof Error ? e.message : 'Failed to assign');
     } finally {
       setAssigning(false);
+      setAssigningAction(null);
     }
   };
 
@@ -465,14 +480,20 @@ const TaskDetails = () => {
                 {userRole === 'admin' && (
                   <div className="mb-6">
                     <div className="label">Assignment</div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    {operatives.length === 0 ? (
+                      <div className="mt-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+                        No operatives found
+                      </div>
+                    ) : null}
+
+                    <div className="relative z-50 flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
                       <select
-                        className="input w-full sm:flex-1"
+                        className="input w-full sm:flex-1 min-h-[44px]"
                         value={selectedOperativeId}
                         onChange={(e) => setSelectedOperativeId(e.target.value)}
                         disabled={assigning}
                       >
-                        <option value="">Unassigned</option>
+                        <option value="">{operatives.length === 0 ? 'No operatives found' : 'Select an operative…'}</option>
                         {operatives.map((o) => (
                           <option key={o.id} value={o.id}>{o.label}</option>
                         ))}
@@ -480,27 +501,57 @@ const TaskDetails = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
                         <button
                           type="button"
-                          className="btn-primary w-full"
+                          className="btn-primary w-full min-h-[44px] inline-flex items-center justify-center gap-2"
                           onClick={handleAssignOperative}
-                          disabled={assigning || !selectedOperativeId}
+                          disabled={assigning || !selectedOperativeId || operatives.length === 0}
                         >
-                          {assigning ? 'Saving…' : 'Assign operative'}
+                          {assigning && assigningAction === 'assign_operative' ? (
+                            <>
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                              Saving…
+                            </>
+                          ) : (
+                            'Assign operative'
+                          )}
                         </button>
                         <button
                           type="button"
-                          className="btn-primary w-full"
+                          className="btn-primary w-full min-h-[44px] inline-flex items-center justify-center gap-2"
                           onClick={handleAdminAssignToMe}
                           disabled={assigning || !currentUserId}
                         >
-                          {assigning ? 'Saving…' : 'Assign to me'}
+                          {assigning && assigningAction === 'assign_me' ? (
+                            <>
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                              Saving…
+                            </>
+                          ) : (
+                            'Assign to me'
+                          )}
                         </button>
                         <button
                           type="button"
-                          className="btn-secondary w-full"
+                          className="btn-secondary w-full min-h-[44px] inline-flex items-center justify-center gap-2"
                           onClick={handleUnassign}
                           disabled={assigning || !task.assigned_to}
                         >
-                          Unassign
+                          {assigning && assigningAction === 'unassign' ? (
+                            <>
+                              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                              </svg>
+                              Saving…
+                            </>
+                          ) : (
+                            'Unassign'
+                          )}
                         </button>
                       </div>
                     </div>
