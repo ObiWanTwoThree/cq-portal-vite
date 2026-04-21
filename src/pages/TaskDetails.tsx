@@ -37,6 +37,15 @@ type TaskRow = {
   photo_urls?: string[] | null
 }
 
+/** Single line for display/edit: legacy rows may split address across location/site/postcode. */
+function mergedTaskLocation(task: TaskRow | null): string {
+  if (!task) return ''
+  const parts = [task.location, task.site, task.postcode]
+    .map((s) => (typeof s === 'string' ? s.trim() : ''))
+    .filter(Boolean)
+  return [...new Set(parts)].join(', ')
+}
+
 type CommentRow = {
   id: string
   task_id: string
@@ -95,7 +104,6 @@ const TaskDetails = () => {
   const [taskEditDraft, setTaskEditDraft] = useState({
     title: '',
     location: '',
-    postcode: '',
     domestic_client_name: '',
     domestic_contact_number: '',
     domestic_full_address: '',
@@ -250,8 +258,7 @@ const TaskDetails = () => {
     if (userRole !== 'admin' || !task) return
     setTaskEditDraft({
       title: (task.title ?? '').toString(),
-      location: (task.location ?? task.site ?? '').toString(),
-      postcode: (task.postcode ?? '').toString(),
+      location: mergedTaskLocation(task),
       domestic_client_name: (task.domestic_client_name ?? '').toString(),
       domestic_contact_number: (task.domestic_contact_number ?? '').toString(),
       domestic_full_address: (task.domestic_full_address ?? '').toString(),
@@ -280,7 +287,7 @@ const TaskDetails = () => {
       const payload = {
         title,
         location: taskEditDraft.location.trim() || null,
-        postcode: taskEditDraft.postcode.trim() || null,
+        postcode: null,
         domestic_client_name:
           taskEditDraft.category === 'Domestic' ? taskEditDraft.domestic_client_name.trim() || null : null,
         domestic_contact_number:
@@ -570,7 +577,7 @@ const TaskDetails = () => {
   const generatePDF = () => {
     const doc = new jsPDF();
     doc.text(task?.title || 'Task', 10, 20);
-    doc.text(task?.location || task?.site || '', 10, 30);
+    doc.text(mergedTaskLocation(task) || '', 10, 30);
     doc.save(`${task?.title || 'task'}.pdf`);
   };
 
@@ -718,30 +725,28 @@ const TaskDetails = () => {
                     <div>
                       <div className="text-xs font-bold tracking-widest text-slate-500">LOCATION</div>
                       {!editTask ? (
-                        <div className="mt-1 text-slate-950 font-semibold break-words">{task.location || task.site || '—'}</div>
+                        <div className="mt-1 text-slate-950 font-semibold break-words">
+                          {mergedTaskLocation(task) || '—'}
+                        </div>
                       ) : (
-                        <input
-                          className="input mt-2 min-h-[44px]"
-                          value={taskEditDraft.location}
-                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, location: e.target.value }))}
-                          disabled={savingTaskEdits}
-                          placeholder="Address / location"
-                        />
+                        <>
+                          <label className="sr-only" htmlFor="task-edit-location">
+                            Site Address or Postcode
+                          </label>
+                          <input
+                            id="task-edit-location"
+                            className="input mt-2 min-h-[44px]"
+                            value={taskEditDraft.location}
+                            onChange={(e) => setTaskEditDraft((p) => ({ ...p, location: e.target.value }))}
+                            disabled={savingTaskEdits}
+                            placeholder="Site address or postcode"
+                          />
+                        </>
                       )}
 
-                      {editTask ? (
-                        <input
-                          className="input mt-2 min-h-[44px]"
-                          value={taskEditDraft.postcode}
-                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, postcode: e.target.value }))}
-                          disabled={savingTaskEdits}
-                          placeholder="Postcode"
-                        />
-                      ) : null}
-
-                      {!editTask && (task.location || task.site)?.trim() ? (
+                      {!editTask && mergedTaskLocation(task).trim() ? (
                         <a
-                          href={mapsHrefAddress((task.location || task.site || '').toString())}
+                          href={mapsHrefAddress(mergedTaskLocation(task))}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-3 inline-flex items-center gap-2 rounded-full border border-purple-200 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-purple-50 min-h-[40px]"
@@ -766,7 +771,20 @@ const TaskDetails = () => {
                         <select
                           className="input mt-2 min-h-[44px]"
                           value={taskEditDraft.category}
-                          onChange={(e) => setTaskEditDraft((p) => ({ ...p, category: e.target.value }))}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setTaskEditDraft((p) => ({
+                              ...p,
+                              category: next,
+                              ...(next !== 'Domestic'
+                                ? {
+                                    domestic_client_name: '',
+                                    domestic_contact_number: '',
+                                    domestic_full_address: '',
+                                  }
+                                : {}),
+                            }))
+                          }}
                           disabled={savingTaskEdits}
                         >
                           <option value="Snagging">Snagging</option>
