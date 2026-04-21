@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import AdminDashboard from '../components/AdminDashboard';
 import OperativeDashboard from '../components/OperativeDashboard';
+import JobSubmittedToast from '../components/JobSubmittedToast';
 
 type UserRole = 'admin' | 'operative' | null;
 
@@ -20,11 +21,23 @@ function normalizeRole(role: unknown): UserRole {
   return null;
 }
 
+type DashboardLocationState = { jobSubmitted?: boolean };
+
 export default function Dashboard() {
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [jobSubmittedToast, setJobSubmittedToast] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const state = location.state as DashboardLocationState | null;
+    if (state?.jobSubmitted) {
+      setJobSubmittedToast(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     const fetchUserAndRole = async () => {
@@ -59,6 +72,7 @@ export default function Dashboard() {
 
   return (
     <div>
+      <JobSubmittedToast open={jobSubmittedToast} onClose={() => setJobSubmittedToast(false)} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-3xl font-bold text-slate-950 tracking-tight mt-2">Dashboard</div>
