@@ -96,7 +96,7 @@ export default function Sites() {
         <div>
           <p className="text-xs font-bold tracking-widest text-slate-500">SITES</p>
           <h2 className="page-title mt-1">Sites</h2>
-          <div className="helper-text mt-1">Select a site to open its overview, documents, and tasks.</div>
+          <div className="helper-text mt-1">Select a site to open its overview, documents, reports, and tasks.</div>
         </div>
         <button type="button" className="btn-secondary" onClick={() => navigate('/dashboard')}>
           Back

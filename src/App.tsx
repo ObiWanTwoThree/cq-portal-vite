@@ -12,6 +12,7 @@ import SafetyDocuments from './pages/SafetyDocuments';
 import Sites from './pages/Sites';
 import SiteDetail from './pages/SiteDetail';
 import SiteDocuments from './pages/SiteDocuments';
+import SiteReports from './pages/SiteReports';
 
 function InviteRedirect() {
   const navigate = useNavigate();
@@ -92,6 +93,14 @@ function App() {
           element={
             <MainLayout>
               <SiteDocuments />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/sites/:id/reports"
+          element={
+            <MainLayout>
+              <SiteReports />
             </MainLayout>
           }
         />

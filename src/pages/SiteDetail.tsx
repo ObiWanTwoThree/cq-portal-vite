@@ -562,6 +562,24 @@ export default function SiteDetail() {
           )}
         </div>
 
+        {/* Reports */}
+        <div className="card p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-lg font-semibold text-slate-950">Reports</div>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => navigate(`/sites/${encodeURIComponent(site?.id ?? '')}/reports`)}
+              disabled={!site?.id}
+            >
+              View reports
+            </button>
+          </div>
+          <div className="helper-text mt-2">
+            Field visit and progress reports submitted for this site.
+          </div>
+        </div>
+
         {/* Documents */}
         <div className="card p-4 sm:p-6">
           <div className="flex items-center justify-between gap-4">
