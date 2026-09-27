@@ -12,7 +12,9 @@ type JobSubmittedToastProps = {
  */
 export default function JobSubmittedToast({ open, onClose, message = 'Job submitted successfully.' }: JobSubmittedToastProps) {
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!open) return
