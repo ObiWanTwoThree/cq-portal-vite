@@ -27,14 +27,16 @@ export default function Dashboard() {
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [jobSubmittedToast, setJobSubmittedToast] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [jobSubmittedToast, setJobSubmittedToast] = useState(
+    () => Boolean((location.state as DashboardLocationState | null)?.jobSubmitted),
+  );
 
+  // Clear the one-shot navigation state so a refresh doesn't re-show the toast.
   useEffect(() => {
     const state = location.state as DashboardLocationState | null;
     if (state?.jobSubmitted) {
-      setJobSubmittedToast(true);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.pathname, location.state, navigate]);
