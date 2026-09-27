@@ -15,6 +15,7 @@ import { getFirstName } from '../lib/name';
 type ProfileRow = {
   id: string
   full_name?: unknown
+  role?: unknown
 }
 
 interface MainLayoutProps {
@@ -25,10 +26,10 @@ interface MainLayoutProps {
   children: React.ReactNode;
 }
 
-const navLinks = [
+const allNavLinks = [
   { label: 'Dashboard', icon: <LayoutDashboard size={22} />, path: '/dashboard' },
   { label: 'Sites', icon: <Building2 size={22} />, path: '/sites' },
-  { label: 'Users', icon: <Users size={22} />, path: '/users' },
+  { label: 'Users', icon: <Users size={22} />, path: '/users', adminOnly: true },
   { label: 'Settings', icon: <Settings size={22} />, path: '/settings' },
 ];
 
@@ -43,6 +44,8 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
   // Fetching profile name is optional (kept for future use).
   const [firstName, setFirstName] = useState<string>('User');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const navLinks = allNavLinks.filter((link) => !link.adminOnly || isAdmin);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const unreadCount = notifications.filter((n) => !n.read_at).length;
@@ -69,7 +72,10 @@ export default function MainLayout({ userName = 'User', children }: MainLayoutPr
       const p = (profile ?? null) as ProfileRow | null;
       const fullName = typeof p?.full_name === 'string' ? p.full_name : '';
       const next = getFirstName({ fullName, email: user.email ?? null });
-      if (!cancelled) setFirstName(next);
+      if (!cancelled) {
+        setFirstName(next);
+        setIsAdmin(typeof p?.role === 'string' && p.role.trim().toLowerCase() === 'admin');
+      }
     };
 
     load();

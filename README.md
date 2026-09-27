@@ -67,6 +67,7 @@ npm run preview
 - `/dashboard`: role-based dashboard
 - `/dashboard/new-task`: create a task (admin)
 - `/task/:id`: task details + updates/chat + file upload + PDF export
+- `/users`: user management (admins only) — invite users, resend set-up links, change roles
 
 ## Supabase data model (expected)
 
@@ -107,6 +108,24 @@ Used by the `/register` flow to mark invites as accepted:
 
 - `email` (text, unique)
 - `accepted` (boolean)
+
+## User management (`admin-users` Edge Function)
+
+The `/users` page calls the `admin-users` Supabase Edge Function
+(`supabase/functions/admin-users/index.ts`). It runs with the service role key, checks
+that the caller's `profiles.role` is `admin`, and then lists users, sends invites, resends
+set-up links or changes roles. The service role key never reaches the browser.
+
+Deploy it with the Supabase CLI (`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are
+provided to Edge Functions automatically):
+
+```bash
+supabase functions deploy admin-users
+```
+
+Invite and set-up emails link back to `<app origin>/register`, so add that URL to
+**Auth → URL Configuration → Redirect URLs** in Supabase. Until the function is deployed,
+`/users` shows a read-only list from `profiles`.
 
 ## Deployment
 
